@@ -68,63 +68,12 @@
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  // 滚动进场：给主要区块加 .reveal，进入视口后点亮
-  var revealTargets = $$('.sec-head, .demo, .step, .note-card, .feat, .deep, .explorer, .shot, .acc, .disc');
-  revealTargets.forEach(function (el, i) {
-    el.classList.add('reveal');
-    el.style.transitionDelay = Math.min(i % 6, 5) * 40 + 'ms';
-  });
-
-  // 注意：进场动画只是锦上添花，绝不能反过来把内容藏住 —— 所以除了 IntersectionObserver，
-  // 还有一层"扫视口"兜底。实测某些环境（后台标签页 / 无头预览）里 IO 回调会被节流甚至不触发，
-  // 只靠 IO 的话那些区块会永远停在 opacity:0 的隐藏态。
-  var pending = revealTargets.slice();
-  function take(el) {
-    el.classList.add('in');
-    var i = pending.indexOf(el);
-    if (i >= 0) pending.splice(i, 1);
-  }
-  function sweep() {
-    var h = window.innerHeight;
-    for (var i = pending.length - 1; i >= 0; i--) {
-      var r = pending[i].getBoundingClientRect();
-      if (r.top < h * 0.94 && r.bottom > 0) take(pending[i]);
-    }
-  }
-  var lastSweep = 0;
-  function onSweep() {
-    var now = Date.now();
-    if (now - lastSweep < 120) return;   // 不用 rAF 节流：后台标签页里 rAF 会被挂起，滚动回调反而更可靠
-    lastSweep = now;
-    sweep();
-  }
-
-  if ('IntersectionObserver' in window && !REDUCED) {
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) {
-        if (en.isIntersecting) { take(en.target); io.unobserve(en.target); }
-      });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 });
-    revealTargets.forEach(function (el) { io.observe(el); });
-    window.addEventListener('scroll', onSweep, { passive: true });
-    window.addEventListener('resize', onSweep, { passive: true });
-    window.addEventListener('load', sweep);
-    sweep();                              // 首屏就能看到的那些立刻点亮
-    // 兜底清扫：IO 与滚动回调在某些环境（后台标签页、无头预览）会被节流甚至不触发。
-    // 每 400ms 扫一次视口；扫够约 15 秒仍未扫完就索性全部点亮 ——
-    // 宁可丢掉动画，也绝不能把内容留在 opacity:0 的隐藏态。
-    var tries = 0;
-    var iv = setInterval(function () {
-      sweep();
-      if (!pending.length || ++tries > 38) {
-        clearInterval(iv);
-        revealTargets.forEach(function (el) { el.classList.add('in'); });
-      }
-    }, 400);
-  } else {
-    revealTargets.forEach(function (el) { el.classList.add('in'); });
-    pending.length = 0;
-  }
+  // 滚动进场：这里只负责给区块打上 .reveal 标记，动画完全由 CSS 的滚动驱动时间轴
+  // （animation-timeline: view()）完成 —— 见 style.css 那段的说明。
+  // 之前是 JS + IntersectionObserver 的写法，一旦回调被节流，内容会卡在 opacity:0 的隐藏态；
+  // 纯 CSS 方案没有这个失败模式：不支持的浏览器干脆没有动画，但内容始终可见。
+  $$('.sec-head, .demo, .step, .note-card, .feat, .deep, .explorer, .shot, .acc, .disc, .specs li')
+    .forEach(function (el) { el.classList.add('reveal'); });
 
   /* ======================== 3. 请求演示 ======================== */
 
@@ -308,9 +257,24 @@
     if (REDUCED) ms = Math.max(90, Math.round(ms * 0.35));
 
     return new Promise(function (resolve) {
+      var settled = false;
+      function finish() {
+        if (settled) return;
+        settled = true;
+        el.style.strokeDashoffset = '0';        // 把这条路线补成"已走完"的样子
+        packetWrap.classList.remove('on');
+        fadeOut(el, L);
+        resolve(true);
+      }
+      // 兜底：帧被挂起时 rAF 不再回调，动画就永远走不完 —— 计数器与日志会停在半路，
+      // 看着像"点了没反应"。超时就当成"已经到达"，让整个场景无论机器多卡都能讲完。
+      var guard = setTimeout(finish, ms + 900);
+
       var t0 = performance.now();
       function frame(now) {
-        if (token !== runToken) { packetWrap.classList.remove('on'); resolve(false); return; }
+        if (token !== runToken) {
+          clearTimeout(guard); packetWrap.classList.remove('on'); resolve(false); return;
+        }
         var t = ms <= 0 ? 1 : Math.min(1, (now - t0) / ms);
         var e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;   // easeInOutQuad
         var pt = el.getPointAtLength(e * L);
@@ -318,10 +282,8 @@
         core.setAttribute('cx', pt.x); core.setAttribute('cy', pt.y);
         el.style.strokeDashoffset = String(L * (1 - e));
         if (t < 1) { requestAnimationFrame(frame); return; }
-        // 到达即兑现（节点闪烁 / 计数器 / 日志跟着就到），轨迹的淡出在后台进行
-        packetWrap.classList.remove('on');
-        fadeOut(el, L);
-        resolve(true);
+        clearTimeout(guard);
+        finish();
       }
       requestAnimationFrame(frame);
     });

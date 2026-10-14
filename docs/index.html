@@ -48,6 +48,7 @@
   <div class="hero-bg" aria-hidden="true">
     <div class="glow g1"></div>
     <div class="glow g2"></div>
+    <div class="glow g3"></div>
     <div class="grid-lines"></div>
   </div>
   <div class="wrap hero-inner">
@@ -74,49 +75,76 @@
       </ul>
     </div>
 
-    <!-- 首屏装饰图：静态示意图，纯 CSS/SVG -->
+    <!-- 首屏装饰：缓存卡（纯 CSS/SVG，无外部资源） -->
     <div class="hero-art" aria-hidden="true">
-      <div class="art-card">
-        <div class="art-head">
-          <span class="art-dot r"></span><span class="art-dot y"></span><span class="art-dot g"></span>
-          <em>请求走向</em>
+      <div class="cache-stack">
+        <div class="stack-back a"></div>
+        <div class="stack-back b"></div>
+        <div class="cache-card">
+          <div class="cc-sheen"></div>
+          <div class="cc-top">
+            <span class="cc-icon">
+              <span class="cc-ring"></span>
+              <img src="assets/icon.png" alt="" width="66" height="66">
+            </span>
+            <span class="cc-meta">
+              <strong>本地缓存</strong>
+              <em>&lt;cacheRoot&gt;\assets\1789531866\…</em>
+            </span>
+            <span class="cc-badge">已就绪</span>
+          </div>
+          <ul class="cc-list">
+            <li>
+              <i class="ft png">PNG</i>
+              <span class="cc-path">img/sp/ui/btn_ability.png</span>
+              <span class="cc-hit">命中 0.8 ms</span>
+            </li>
+            <li>
+              <i class="ft m4a">M4A</i>
+              <span class="cc-path">voice/1/1001_a_1.m4a</span>
+              <span class="cc-hit">命中 1.1 ms</span>
+            </li>
+            <li>
+              <i class="ft js">JS</i>
+              <span class="cc-path">js/main.js</span>
+              <span class="cc-hit">命中 0.6 ms</span>
+            </li>
+          </ul>
+          <div class="cc-foot">
+            <span class="dot-live"></span>
+            <span>命中即从硬盘读出 —— <b>这一次请求完全不联网</b></span>
+          </div>
         </div>
-        <svg viewBox="0 0 380 250" class="art-svg">
-          <defs>
-            <linearGradient id="artAccent" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#1f6feb"/><stop offset="1" stop-color="#a371f7"/>
-            </linearGradient>
-          </defs>
-          <rect class="an" x="8" y="100" width="106" height="50" rx="11"/>
-          <text class="at" x="61" y="122">浏览器</text>
-          <text class="as" x="61" y="138">游戏页面</text>
-
-          <rect class="an hi" x="137" y="100" width="106" height="50" rx="11"/>
-          <text class="at" x="190" y="122">本程序</text>
-          <text class="as" x="190" y="138">127.0.0.1:8899</text>
-
-          <rect class="an" x="266" y="30" width="106" height="50" rx="11"/>
-          <text class="at" x="319" y="52">本地缓存</text>
-          <text class="as" x="319" y="68">硬盘上的文件</text>
-
-          <rect class="an" x="266" y="170" width="106" height="50" rx="11"/>
-          <text class="at" x="319" y="192">源站</text>
-          <text class="as" x="319" y="208">游戏服务器 / CDN</text>
-
-          <path class="al" d="M114 125 H137"/>
-          <path class="al" d="M243 125 H256 Q270 125 270 111 V85 Q270 71 284 71 H266" transform="translate(18 0)"/>
-          <path class="al" d="M243 125 H256 Q270 125 270 139 V165 Q270 179 284 179 H266" transform="translate(18 0)"/>
-          <path class="al di" d="M61 150 V226 Q61 240 75 240 H345 Q352 240 352 232 V220"/>
-          <circle class="ap" r="4.5" fill="url(#artAccent)">
-            <animateMotion dur="2.6s" repeatCount="indefinite" path="M114 125 H137"/>
-          </circle>
-          <circle class="ap" r="4.5" fill="#3fb950">
-            <animateMotion dur="2.6s" repeatCount="indefinite" path="M243 125 H256 Q270 125 270 111 V85 Q270 71 284 71 H266" transform="translate(18 0)"/>
-          </circle>
-        </svg>
-        <div class="art-foot"><span class="dot-live"></span>命中时完全不联网</div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ============ 规格条 ============ -->
+<section class="specband">
+  <div class="wrap">
+    <ul class="specs">
+      <li>
+        <b>0</b>
+        <span>个 npm 依赖</span>
+        <em>只用 Node 内置模块写成，连 <code>npm install</code> 都不需要</em>
+      </li>
+      <li>
+        <b>5</b>
+        <span>个实时计数器</span>
+        <em>命中 / 回源 / 新写入 / 异常拦截 / 错误</em>
+      </li>
+      <li>
+        <b>24<small>h</small></b>
+        <span>版本戳在用窗口</span>
+        <em>超过 24 小时没用到的版本戳，可以一键清掉</em>
+      </li>
+      <li>
+        <b>1</b>
+        <span>个单文件 exe</span>
+        <em>约 94 MB —— 连 Node 运行时也一起装了进去</em>
+      </li>
+    </ul>
   </div>
 </section>
 
