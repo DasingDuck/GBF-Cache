@@ -14,7 +14,7 @@
   --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#58a6ff; --store:#a371f7;
   --c1:#22d3ee;
   --hi:color-mix(in srgb,var(--c1) 34%,var(--line));   /* 悬停边框 */
-  --pencil:rgba(238,236,231,.9);                       /* 黑板上是白粉笔线稿 */
+  --stroke:rgba(238,236,231,.92);                      /* 线条墨色（深色主题是白粉笔） */
   --shadow:0 12px 34px rgba(0,0,0,.42);
   --shadow-sm:0 4px 14px rgba(0,0,0,.28);
   --r:14px; --r-sm:10px;
@@ -29,7 +29,7 @@ body.light{
   --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#0969da; --store:#8250df;
   --c1:#0891b2;                                        /* 浅色下用深一档的青，白底上才够清楚 */
   --hi:color-mix(in srgb,var(--c1) 34%,var(--line2));
-  --pencil:rgba(26,29,34,.94);                         /* 纸上是石墨 */
+  --stroke:rgba(26,29,34,.92);
   --shadow:0 14px 34px rgba(23,35,58,.11);
   --shadow-sm:0 4px 12px rgba(23,35,58,.07);
 }
@@ -630,12 +630,13 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 
 /* ==========================================================================
    框架层：直角 + 铅笔构造线
-   两件事，只加在"框架"上（容器盒子与控件外框），内容仍是扁平风格：
-   1) 铅笔质感 —— 线不抖，是纸纹吃墨的颗粒感（见 index.html 的 #pencil 滤镜）
-   2) 构造线的画法 —— 四条线分别画出，两端各自越过角点往外延一段，
-      于是四个角上线条互相交叉、探出去一截，像设计过程中随手拉出来的辅助线
+   只加在"框架"上（容器盒子与控件外框），内容仍是扁平风格：
+   · 直角；线本身是直的、干净的，不做任何纹理
+   · 四条线分别画出，两端各自越过角点往外延一段 —— 角上互相交叉、探出去一截，
+     像设计过程中随手拉出来的辅助线
+   · 每条线的两端渐隐：起笔一侧收得快、收笔一侧拖得长，像真实落笔与提笔的力度变化
    ========================================================================== */
-:root{ --over:8px; --lw:1.5px; }        /* 越出角点的长度 / 线宽 */
+:root{ --over:8px; --lw:1.5px; --fade:15px; }   /* 越出角点长度 / 线宽 / 两端渐隐长度 */
 
 .cache-card,.demo-stage,.panel,.step,.feat,.deep,.explorer,.acc,.disc,
 .note-card,.exp-json,.eyebrow,.cmp,.btn,.icon-btn,.seg,.chip,.mini{
@@ -643,8 +644,8 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
   border-radius:0;                       /* 直角 */
   border-color:transparent;              /* 让位给构造线（保留宽度，布局不动） */
 }
-/* 小控件少越一点，免得帧面太碎 */
-.btn,.icon-btn,.seg,.chip,.mini,.eyebrow{ --over:5px }
+/* 小控件少越一点、收笔短一点，免得帧面太碎 */
+.btn,.icon-btn,.seg,.chip,.mini,.eyebrow{ --over:5px; --fade:9px }
 
 .cache-card::before,.demo-stage::before,.panel::before,.step::before,.feat::before,
 .deep::before,.explorer::before,.acc::before,.disc::before,.note-card::before,
@@ -653,17 +654,21 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
   content:"";position:absolute;inset:calc(-1 * var(--over));
   width:auto;height:auto;opacity:1;      /* 覆盖掉 .feat 等元素原来的悬停光晕层属性 */
   pointer-events:none;
+  /* 四条线分别画出，每条都是"两端渐隐"的一段：
+     起笔一侧收得快（--fade * .65），收笔一侧拖得长（--fade），像真实落笔与提笔的力度变化。
+     横线沿 X 渐隐、竖线沿 Y 渐隐，所以同一个色值写了两种方向。 */
   background-image:
-    linear-gradient(var(--pencil) 0 0),linear-gradient(var(--pencil) 0 0),
-    linear-gradient(var(--pencil) 0 0),linear-gradient(var(--pencil) 0 0);
+    linear-gradient(90deg,transparent 0,var(--stroke) calc(var(--fade) * .65),var(--stroke) calc(100% - var(--fade)),transparent 100%),
+    linear-gradient(90deg,transparent 0,var(--stroke) calc(var(--fade) * .65),var(--stroke) calc(100% - var(--fade)),transparent 100%),
+    linear-gradient(180deg,transparent 0,var(--stroke) calc(var(--fade) * .65),var(--stroke) calc(100% - var(--fade)),transparent 100%),
+    linear-gradient(180deg,transparent 0,var(--stroke) calc(var(--fade) * .65),var(--stroke) calc(100% - var(--fade)),transparent 100%);
   background-size:100% var(--lw),100% var(--lw),var(--lw) 100%,var(--lw) 100%;
   background-position:left var(--over),left calc(100% - var(--over)),
                       var(--over) top,calc(100% - var(--over)) top;
   background-repeat:no-repeat;
-  filter:url(#pencil);
 }
 /* 输入框不支持 ::before，单独给它一条（直线、不上颗粒） */
-#urlInput{border-color:var(--pencil)}
+#urlInput{border-color:var(--stroke)}
 /* 带强调边的容器：彩色竖边留着（那是"标记"，不是框架） */
 .note-card{border-left:3px solid var(--warn)}
 /* 直角之后没有圆角要裁，放开 overflow，别把越出角点的那一截切掉 */
@@ -673,8 +678,9 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 .sec-head{position:relative}
 .sec-head::after{
   content:"";position:absolute;left:calc(-1 * var(--over));right:calc(-1 * var(--over));
-  bottom:-16px;height:var(--lw);background:var(--pencil);
-  filter:url(#pencil);pointer-events:none;
+  bottom:-16px;height:var(--lw);pointer-events:none;
+  background-image:linear-gradient(90deg,transparent 0,var(--stroke) calc(var(--fade) * .65),
+                    var(--stroke) calc(100% - var(--fade)),transparent 100%);
 }
 
 /* ---------- 滚动进场 ----------
