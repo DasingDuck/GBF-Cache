@@ -259,8 +259,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .guide .feat-ic svg{width:17px;height:17px}
 .guide .feat h3{font-size:15.5px;margin-bottom:6px}
 .guide .feat p{font-size:13.6px;line-height:1.6}
-.guide .deep{margin-top:18px}
-.guide .step{padding:20px 20px}
+.guide .guide .step{padding:20px 20px}
 .guide .step p{font-size:14px}
 .guide .note-card{margin-top:18px}
 .acc-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
@@ -297,6 +296,8 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 /* 卡片被撑高后，内容在卡片内居中 —— 试过"编号贴顶、文字贴底"，
    那样中间会挖出一大块空，反而更像没写完 */
 .guide .step{display:flex;flex-direction:column;justify-content:center}
+/* 卡片被撑高后内容居中，别让字吊在顶上 */
+.guide .feat{display:flex;flex-direction:column;justify-content:center}
 .guide .acc{display:flex;flex-direction:column}
 .guide .acc details{flex:1;display:flex;flex-direction:column;justify-content:center}
 .guide .disc{display:flex;flex-direction:column}
@@ -530,19 +531,6 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .feat code{background:var(--bg-soft);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--fg2)}
 .feat code{background:var(--panel2)}
 
-.deep{margin-top:24px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden}
-.deep summary{padding:15px 19px;cursor:pointer;font-weight:600;font-size:15px;list-style:none;display:flex;align-items:center;gap:9px}
-.deep summary::-webkit-details-marker{display:none}
-.deep summary::before{
-  content:"";width:7px;height:7px;border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);
-  transform:rotate(-45deg);transition:.2s;flex:0 0 auto;margin-left:2px;
-}
-.deep[open] summary::before{transform:rotate(45deg)}
-.deep summary:hover{color:var(--info)}
-.deep-body{padding:2px 21px 20px;border-top:1px solid var(--line);color:var(--dim);font-size:14.6px}
-.deep-body p{margin:15px 0 0}
-.deep-body code{background:var(--bg-soft);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--fg2)}
-.deep-body code{background:var(--panel2)}
 
 /* ---------- 常见问题 ---------- */
 .acc{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden}

@@ -27,7 +27,7 @@
     <nav class="nav-links" aria-label="页面导航">
       <a href="#demo">请求演示</a>
       <a href="#how">安装使用</a>
-      <a href="#features">特性</a>
+      <a href="#features">程序特性</a>
       <a href="#faq">常见问题</a>
     </nav>
     <div class="nav-actions">
@@ -140,7 +140,7 @@
       <ul>
           <li><button type="button" class="g-item is-active" data-panel="demo" aria-selected="true"><i class="g-dot" aria-hidden="true"></i><span class="g-label">请求演示</span></button></li>
           <li><button type="button" class="g-item" data-panel="how" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">安装使用</span></button></li>
-          <li><button type="button" class="g-item" data-panel="features" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">特性</span></button></li>
+          <li><button type="button" class="g-item" data-panel="features" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">程序特性</span></button></li>
           <li><button type="button" class="g-item" data-panel="faq" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">常见问题</span></button></li>
           <li><button type="button" class="g-item" data-panel="disclaimer" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">免责声明</span></button></li>
       </ul>
@@ -293,7 +293,7 @@
         </article>
         <article class="g-panel" id="features" data-panel="features">
     <div class="sec-head">
-      <p class="sec-kicker" data-fig="03">特性</p>
+      <p class="sec-kicker" data-fig="03">程序特性</p>
       <h2>它凭什么又快又稳</h2>
       <p class="sec-sub">下面每一条都是程序里真实存在的机制，不是宣传词。</p>
     </div>
@@ -314,14 +314,14 @@
         <p>游戏的资源 URL 带 <code>?1729002592</code> 这类版本参数。版本不一致的文件绝不当命中，避免游戏判定版本不符而反复整页重载。</p>
       </article>
       <article class="feat">
-        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 20 8v8l-8 4.5L4 16V8z"/><path d="m4 8 8 4.5L20 8M12 12.5v8"/></svg></span>
-        <h3>元数据跟着文件走</h3>
-        <p>内容类型与 CORS 头跟资源一起存在旁边的 <code>.ext</code> 里，命中时原样回给浏览器 —— 带 <code>crossorigin</code> 的脚本才不会被拦。</p>
+        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5M12 7.5V12l3.5 2"/></svg></span>
+        <h3>换版本时少下很多</h3>
+        <p>游戏更新资源版本时，程序会先跟源站确认「哪些文件真的变了」——没变的直接沿用本地那份，只有真变了的才重新下载。更新日要下的量因此小得多。</p>
       </article>
       <article class="feat">
-        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg></span>
-        <h3>原子写 + 并发合并</h3>
-        <p>先写临时文件再改名，断电也不会留下半个文件；同一份资源的并发请求只回源一次。</p>
+        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 3 5.5 13.5H11L10 21l7.5-10.5H12z"/></svg></span>
+        <h3>能和加速器一起用</h3>
+        <p>程序会自己认出你正在用的加速器，把需要联网的那部分流量交给它走 —— 读缓存走本地、要联网走加速，两边各管一段，互不打架。</p>
       </article>
       <article class="feat">
         <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 18V6m0 12h17M7 15l3.5-4 3 2.5L18 8"/></svg></span>
@@ -329,17 +329,6 @@
         <p>命中、回源、新写入、异常拦截、错误五个计数实时推到控制台和桌面悬浮条，命不命中一眼就知道。</p>
       </article>
     </div>
-    <details class="deep">
-      <summary>还想知道更细的机制？</summary>
-      <div class="deep-body">
-        <p><b>版本切换预热。</b>游戏换版本戳时（路径里的那串数字变了），程序会在后台对上一任戳的同名文件向源站发条件请求：
-          源站回 304 就把旧文件「过户」到新路径（零下载），回 200 说明内容真的变了、提前下好。
-          这把更新日要重下的量，从「全部文件」压到「真正变了的文件」。</p>
-        <p><b>旧戳清理。</b>被请求过的版本戳会记下最后请求时间，超过 24 小时没被用到就不算「在用」，控制台里可以据此清掉过期的那一批。</p>
-        <p><b>缓存文件布局。</b><code>&lt;缓存目录&gt;/assets/…</code> 完全镜像资源 URL 的路径，旁边一份同名 <code>.ext</code> 记录元数据。
-          查询串不进文件名，但会记进 <code>.ext</code> 的 <code>q</code> 字段参与命中比对。</p>
-      </div>
-    </details>
         </article>
         <article class="g-panel" id="faq" data-panel="faq">
     <div class="sec-head">
