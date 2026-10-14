@@ -115,8 +115,19 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 @media (max-width:900px){ .nav-links{display:none} }
 
 /* ---------- 首屏 ---------- */
-.hero{position:relative;overflow:hidden;padding:78px 0 92px;border-bottom:1px solid var(--line);
-  background-color:rgba(255,255,255,.42)}   /* 首屏遮罩最浅：让底图在第一节最清楚 */
+/* 首屏正好占满一屏（减去顶栏 64px），分界线落在屏幕底边，
+   下面那条规格条与讲解区都不露出；内容在整屏里垂直居中。
+   移动端用 svh：地址栏收起/展开时不会顶出一条缝。 */
+.hero{
+  position:relative;overflow:hidden;
+  min-height:calc(100vh - 64px);
+  min-height:calc(100svh - 64px);
+  display:flex;flex-direction:column;justify-content:center;
+  padding:44px 0;
+  border-bottom:1px solid var(--line);
+  background-color:rgba(255,255,255,.42);   /* 首屏遮罩最浅：让底图在第一节最清楚 */
+}
+.hero-inner{width:100%}
 .hero-bg{position:absolute;inset:0;pointer-events:none}
 .hero-bg::after{                     /* 细颗粒，压掉大面积纯色的塑料感 */
   content:"";position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;
