@@ -668,7 +668,12 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
      像设计过程中随手拉出来的辅助线
    · 每条线的两端渐隐：起笔一侧收得快、收笔一侧拖得长，像真实落笔与提笔的力度变化
    ========================================================================== */
-:root{ --over:8px; --lw:1.5px; --fade:15px; }   /* 越出角点长度 / 线宽 / 两端渐隐长度 */
+:root{
+  --over:0px;      /* 构造线越出角点的长度：0 = 完全贴边，不外溢 */
+  --lw:1.5px;      /* 线宽 */
+  --fade:7px;      /* 两端渐隐长度（贴边后落在角上，成了柔和的开口） */
+  --bw:1px;        /* 元素自身那圈透明边框的宽度，下面要把线补到外沿 */
+}
 
 .cache-card,.demo-stage,.panel,.step,.feat,.deep,.explorer,.acc,.disc,
 .note-card,.exp-json,.eyebrow,.cmp,.btn,.icon-btn,.seg,.chip,.mini{
@@ -677,13 +682,15 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
   border-color:transparent;              /* 让位给构造线（保留宽度，布局不动） */
 }
 /* 小控件少越一点、收笔短一点，免得帧面太碎 */
-.btn,.icon-btn,.seg,.chip,.mini,.eyebrow{ --over:5px; --fade:9px }
+.btn,.icon-btn,.seg,.chip,.mini,.eyebrow{ --fade:5px }
 
 .cache-card::before,.demo-stage::before,.panel::before,.step::before,.feat::before,
 .deep::before,.explorer::before,.acc::before,.disc::before,.note-card::before,
 .exp-json::before,.eyebrow::before,.cmp::before,.btn::before,
 .icon-btn::before,.seg::before,.chip::before,.mini::before{
-  content:"";position:absolute;inset:calc(-1 * var(--over));
+  /* 元素自己那圈 border 是透明的但占位，伪元素默认对齐的是 padding box，
+     所以要再往外推一个 --bw，线才正好压在视觉外沿上（贴边） */
+  content:"";position:absolute;inset:calc(-1 * (var(--over) + var(--bw)));
   width:auto;height:auto;opacity:1;      /* 覆盖掉 .feat 等元素原来的悬停光晕层属性 */
   pointer-events:none;
   /* 四条线分别画出，每条都是"两端渐隐"的一段：
@@ -695,8 +702,8 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
     linear-gradient(180deg,transparent 0,var(--stroke) calc(var(--fade) * .65),var(--stroke) calc(100% - var(--fade)),transparent 100%),
     linear-gradient(180deg,transparent 0,var(--stroke) calc(var(--fade) * .65),var(--stroke) calc(100% - var(--fade)),transparent 100%);
   background-size:100% var(--lw),100% var(--lw),var(--lw) 100%,var(--lw) 100%;
-  background-position:left var(--over),left calc(100% - var(--over)),
-                      var(--over) top,calc(100% - var(--over)) top;
+  background-position:left calc(var(--over) + var(--bw)),left calc(100% - var(--over) - var(--bw)),
+                      calc(var(--over) + var(--bw)) top,calc(100% - var(--over) - var(--bw)) top;
   background-repeat:no-repeat;
 }
 /* 输入框不支持 ::before，单独给它一条（直线、不上颗粒） */
