@@ -33,10 +33,10 @@
 }
 
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;background:var(--bg)}
 @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
 body{
-  margin:0; background:var(--bg); color:var(--fg);
+  margin:0; background:transparent; color:var(--fg);
   font:16px/1.72 "Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
   -webkit-font-smoothing:antialiased;
 }
@@ -115,20 +115,14 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 @media (max-width:900px){ .nav-links{display:none} }
 
 /* ---------- 首屏 ---------- */
-.hero{position:relative;overflow:hidden;padding:78px 0 92px;border-bottom:1px solid var(--line)}
+.hero{position:relative;overflow:hidden;padding:78px 0 92px;border-bottom:1px solid var(--line);
+  background-color:rgba(255,255,255,.42)}   /* 首屏遮罩最浅：让底图在第一节最清楚 */
 .hero-bg{position:absolute;inset:0;pointer-events:none}
 .hero-bg::after{                     /* 细颗粒，压掉大面积纯色的塑料感 */
   content:"";position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-/* 首屏底色就是品牌渐变本身（浅青 → 浅蓝）：这两个色很浅，做整片底最合适，
-   再用一层从下往上的遮罩让它自然淡出，不与下面的白色区块硬接。 */
-.hero-bg{
-  background-image:linear-gradient(118deg,var(--a1),var(--a2));
-  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 54%,transparent 100%);
-  mask-image:linear-gradient(180deg,#000 0%,#000 54%,transparent 100%);
-  opacity:.72;
-}
+/* 首屏底色让位给整页底图，这里不再铺渐变 */
 .grid-lines{
   position:absolute;inset:0;opacity:.5;
   background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
@@ -221,8 +215,8 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 
 
 /* ---------- 区块外壳 ---------- */
-.sec{padding:86px 0;border-bottom:1px solid var(--line)}
-.sec.alt{background:var(--bg-soft)}
+.sec{padding:86px 0;border-bottom:1px solid var(--line);background-color:rgba(255,255,255,.58)}
+.sec.alt{background-color:rgba(255,255,255,.74)}
 .sec-head{max-width:770px;margin-bottom:46px}
 .sec-kicker{
   margin:0 0 14px;font-size:12.5px;font-weight:700;letter-spacing:.17em;text-transform:uppercase;
@@ -241,7 +235,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .sec-sub code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
 
 /* ---------- 规格条 ---------- */
-.specband{border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--bg-soft),var(--bg))}
+.specband{border-bottom:1px solid var(--line);background-color:rgba(255,255,255,.58)}
 .specs{list-style:none;margin:0;padding:32px 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
 .specs li{padding:4px 26px;border-left:1px solid var(--line)}
 .specs li:first-child{border-left:0;padding-left:0}
@@ -539,7 +533,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .disc-list b{color:var(--fg2)}
 
 /* ---------- 页脚 ---------- */
-.foot{position:relative;padding:44px 0;background:var(--bg-soft)}
+.foot{position:relative;padding:44px 0;background-color:rgba(255,255,255,.74)}
 .foot::before{
   content:"";position:absolute;left:0;right:0;top:0;height:1px;
   background:linear-gradient(90deg,transparent,var(--line2),transparent);
@@ -556,6 +550,15 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
    质感层（第二轮美术）：细颗粒 / 内高光 / 分节编号 / 光晕呼吸 / 原生控件
    刻意放在样式表靠后 —— 这里要覆盖前面各组件的阴影与标题装饰
    ========================================================================== */
+
+/* 页面底图：这张风景图固定在视口里铺满整页，透明度 0.7。
+   z-index:-1 —— 压在内容之下、页面底色之上；区块另有浅色遮罩保证文字可读。 */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-image:url("bg-fantasy.jpg");   /* 相对样式表本身：docs/assets/ */
+  background-size:cover;background-position:center;background-repeat:no-repeat;
+  opacity:.7;
+}
 
 /* 全页细颗粒：一层固定的噪点，给大片纯色一点"纸感"。pointer-events:none 保证不影响操作 */
 body::after{
