@@ -146,13 +146,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .grad{background:var(--brand-ink);
   -webkit-background-clip:text;background-clip:text;color:transparent}
 .lead{font-size:clamp(15.5px,1.6vw,17.5px);color:var(--fg2);max-width:640px;margin:0 0 30px}
-.hero-btns{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:36px}
-.hero-facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;max-width:680px}
-@media (max-width:640px){ .hero-facts{grid-template-columns:minmax(0,1fr);gap:12px} }
-.hero-facts li{border-left:2px solid var(--line2);padding-left:13px}
-.hero-facts b{display:block;font-size:14.5px}
-.hero-facts span{font-size:13px;color:var(--dim);line-height:1.55;display:block}
-
+.hero-btns{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:0}
 /* 首屏装饰：一张缓存卡 + 后面两张错位的"厚度" */
 .hero-art{display:flex;justify-content:center;position:relative}
 .cache-stack{position:relative;width:100%;max-width:468px}
