@@ -14,11 +14,14 @@
   --fg:#111418; --fg2:#272c33; --dim:#565d68; --dim2:#6d747e;
   /* 状态语义五色：与控制台（dashboard.html）五个计数器一一对应 */
   --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#0969da; --store:#8250df;
-  /* 品牌暖色对：橙 → 玫红。刻意不用蓝紫（AI 默认配色），也不用青绿+品红
-     （两个冷色暗端混出来的中间色发灰，在白底上发脏）；暖色对的中间是饱和珊瑚色。 */
-  --a1:#ea580c; --a2:#db2777;
+  /* 品牌双色：春日青 → 粉红。两者色相相差 160° 以上，渐变有明确的走向；
+     刻意避开蓝紫（AI 默认配色），也避开"两个暗冷色"那种混出来发灰的组合。 */
+  --a1:#2fa98f;   /* 春日青：偏青的嫩绿 */ 
+  --a2:#e04a8f;   /* 粉红 */
   --hi:color-mix(in srgb,var(--a2) 30%,var(--line2));   /* 悬停边框 */
-  --brand:linear-gradient(120deg,var(--a1),var(--a2));  /* 标题/按钮/数字/图标的渐变 */
+  /* 渐变不用"两端对插"——互补色无论 sRGB 还是 oklab 插值，中点都会掉彩度（发灰）。
+     改成两段实色 + 中间一条窄过渡带：两头都饱和，接缝本身成为设计元素。 */
+  --brand:linear-gradient(100deg,var(--a1) 0%,var(--a1) 40%,var(--a2) 62%,var(--a2) 100%);
   --stroke:rgba(26,29,34,.92);                          /* 框架构造线的墨色 */
   --inner:inset 0 1px 0 rgba(255,255,255,.9);
   --shadow:0 14px 34px rgba(23,35,58,.11);
@@ -158,7 +161,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 }
 .hero h1{font-size:clamp(30px,4.4vw,50px);margin:0 0 20px;font-weight:700}
 /* 第二行整句走品牌渐变 —— 这是"原本的色彩呈现"里最抓眼的一处 */
-.grad{background:var(--brand);background-size:200% 100%;
+.grad{background:var(--brand);
   -webkit-background-clip:text;background-clip:text;color:transparent}
 .lead{font-size:clamp(15.5px,1.6vw,17.5px);color:var(--fg2);max-width:640px;margin:0 0 30px}
 .hero-btns{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:36px}
@@ -234,7 +237,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
   content:counter(sec,decimal-leading-zero);
   display:inline-block;vertical-align:middle;margin:0 11px 1px 0;padding-right:11px;
   border-right:1px solid color-mix(in srgb,var(--a2) 30%,var(--line2));
-  background:var(--brand);-webkit-background-clip:text;background-clip:text;color:transparent;
+  color:var(--a1);   /* 只有 12px，渐变看不出来，直接用春日青 */
   font-family:"Cascadia Code",Consolas,monospace;font-size:11.5px;letter-spacing:0;
 }
 .sec-head h2{font-size:clamp(24px,3.1vw,35px);margin:0 0 15px;font-weight:700;letter-spacing:-.02em}
@@ -250,7 +253,8 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .specs b{
   display:block;font-weight:800;line-height:1.08;letter-spacing:-.02em;
   font-size:clamp(28px,3.4vw,40px);font-variant-numeric:tabular-nums;
-  background:var(--brand);background-size:200% 100%;
+  /* 数字很窄，横向渐变只会显出一种色 —— 改成竖向：上春日青、下粉红 */
+  background:linear-gradient(180deg,var(--a1) 0%,var(--a1) 40%,var(--a2) 62%,var(--a2) 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 .specs b small{font-size:.52em;font-weight:700}
@@ -303,7 +307,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .stage-svg .node rect{fill:var(--panel2);stroke:var(--line2);stroke-width:1.6;transition:.2s;
   filter:drop-shadow(0 2px 7px rgba(0,0,0,.3))}
 .stage-svg .node rect{filter:drop-shadow(0 2px 6px rgba(31,41,55,.10))}
-.stage-svg .node.proxy rect{stroke:var(--a1);stroke-width:2.2;fill:color-mix(in srgb,var(--a1) 9%,var(--panel2))}
+.stage-svg .node.proxy rect{stroke:var(--a2);stroke-width:2.2;fill:color-mix(in srgb,var(--a2) 8%,var(--panel2))}
 .stage-svg .nt{fill:var(--fg);font-size:17px;font-weight:600;text-anchor:middle}
 .stage-svg .ns{fill:var(--dim2);font-size:12.6px;text-anchor:middle}
 .stage-svg .plabel{fill:var(--dim2);font-size:12.4px;text-anchor:middle}
