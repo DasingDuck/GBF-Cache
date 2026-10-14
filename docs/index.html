@@ -46,15 +46,13 @@
 <!-- ============ 首屏 ============ -->
 <section class="hero" id="top">
   <div class="hero-bg" aria-hidden="true">
-    <div class="glow g1"></div>
-    <div class="glow g2"></div>
-    <div class="glow g3"></div>
+    <div class="glow"></div>
     <div class="grid-lines"></div>
   </div>
   <div class="wrap hero-inner">
     <div class="hero-copy">
       <p class="eyebrow"><span class="dot-live"></span>当前版本 <b data-version>—</b> · 已在本机稳定运行</p>
-      <h1>把本机已有的游戏资源<br><span class="grad">当作 CDN 来用</span></h1>
+      <h1>把本机已有的游戏资源<br><span class="grad">当作 <em>CDN</em> 来用</span></h1>
       <p class="lead">
         碧蓝幻想的图片、声音、文字脚本，在第一次见到它们时顺手在你自己的电脑上存一份。
         以后再打开游戏，这些资料直接从硬盘读出来，不用再上网重新下载 ——
@@ -175,9 +173,6 @@
 
         <svg viewBox="0 0 720 372" class="stage-svg" id="stageSvg" role="img" aria-label="请求路径示意图">
           <defs>
-            <linearGradient id="proxyGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#1f6feb"/><stop offset="1" stop-color="#22d3ee"/>
-            </linearGradient>
             <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
               <feGaussianBlur stdDeviation="5" result="b"/>
               <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>

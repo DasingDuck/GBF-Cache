@@ -6,13 +6,14 @@
 
 :root{
   color-scheme:dark;   /* 让复选框、滚动条等原生控件跟随主题 */
-  --bg:#0b0e13; --bg-soft:#0e1116; --panel:#141a22; --panel2:#1a212b;
-  --line:#242c38; --line2:#303a49;
-  --fg:#e6edf3; --fg2:#c9d1d9; --dim:#8b949e; --dim2:#6e7681;
+  --bg:#0f1012; --bg-soft:#131417; --panel:#18191d; --panel2:#1e2024;
+  --line:#292b30; --line2:#373a41;
+  --fg:#e9eaec; --fg2:#c7c9cd; --dim:#8b8e95; --dim2:#71747b;
+  /* 只有 --c1 一个强调色（青），只用于交互与结构（编号/悬停/聚焦/选区…）；
+     其余彩色一律是状态语义（ok / warn / err / info / store），不拿去做装饰。 */
   --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#58a6ff; --store:#a371f7;
-  --a1:#1f6feb; --a2:#a371f7;
-  --c1:#22d3ee;                                        /* 撞色：青 —— 只用在交互与结构上 */
-  --hi:color-mix(in srgb,var(--c1) 40%,var(--line));   /* hover 边框：往青色偏一点 */
+  --c1:#22d3ee;
+  --hi:color-mix(in srgb,var(--c1) 34%,var(--line));   /* 悬停边框 */
   --shadow:0 12px 34px rgba(0,0,0,.42);
   --shadow-sm:0 4px 14px rgba(0,0,0,.28);
   --r:14px; --r-sm:10px;
@@ -25,9 +26,8 @@ body.light{
   --line:#e5e9f0; --line2:#ccd4e0;
   --fg:#0c1118; --fg2:#232a33; --dim:#545e6b; --dim2:#6b7683;
   --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#0969da; --store:#8250df;
-  --a1:#1163d6; --a2:#7c3aed;
   --c1:#0891b2;                                        /* 浅色下用深一档的青，白底上才够清楚 */
-  --hi:color-mix(in srgb,var(--c1) 38%,var(--line2));
+  --hi:color-mix(in srgb,var(--c1) 34%,var(--line2));
   --shadow:0 14px 34px rgba(23,35,58,.11);
   --shadow-sm:0 4px 12px rgba(23,35,58,.07);
 }
@@ -59,10 +59,10 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 }
 .btn:hover{background:var(--panel2);border-color:var(--dim2);text-decoration:none;transform:translateY(-1px)}
 .btn.primary{
-  background:linear-gradient(135deg,var(--a1),var(--a2));
-  border-color:transparent;color:#fff;box-shadow:0 6px 20px rgba(31,111,235,.32);
+  background:var(--c1);
+  border-color:transparent;color:#07272d;box-shadow:0 6px 18px rgba(0,0,0,.34);
 }
-.btn.primary:hover{box-shadow:0 9px 26px rgba(31,111,235,.42);filter:brightness(1.06)}
+.btn.primary:hover{box-shadow:0 9px 24px rgba(0,0,0,.4);filter:brightness(1.09)}
 .btn.primary::after{                    /* 悬停时扫过的一道光 */
   content:"";position:absolute;top:0;left:-70%;width:42%;height:100%;pointer-events:none;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);
@@ -96,7 +96,7 @@ body.light .i-sun{display:none}
 .brand:hover{text-decoration:none}
 .brand-logo{
   width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;
-  background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;
+  background:var(--c1);color:#07272d;
   font-size:12px;font-weight:700;letter-spacing:.4px;
 }
 .brand-text{display:flex;flex-direction:column;line-height:1.25}
@@ -108,7 +108,7 @@ body.light .i-sun{display:none}
 }
 .nav-links a::after{
   content:"";position:absolute;left:13px;right:13px;bottom:3px;height:1.5px;border-radius:2px;
-  background:linear-gradient(90deg,var(--a1),var(--c1));
+  background:var(--c1);
   transform:scaleX(0);transform-origin:left;transition:transform .24s ease;
 }
 .nav-links a:hover{background:var(--panel);color:var(--fg);text-decoration:none}
@@ -124,11 +124,13 @@ body.light .i-sun{display:none}
   content:"";position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-.glow{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5}
-.g1{width:560px;height:560px;background:radial-gradient(circle,#1f6feb 0%,transparent 68%);top:-240px;left:-110px}
-.g2{width:500px;height:500px;background:radial-gradient(circle,#a371f7 0%,transparent 68%);top:-150px;right:-130px;opacity:.4}
-.g3{width:420px;height:420px;background:radial-gradient(circle,#1f6feb 0%,transparent 70%);bottom:-260px;left:38%;opacity:.22}
-body.light .glow{opacity:.26}
+/* 只有一层中性的顶光（舞台灯），不再堆蓝紫光斑 —— 那是最像"AI 生成页"的元素 */
+.glow{
+  position:absolute;left:50%;top:-330px;transform:translateX(-50%);
+  width:1180px;height:660px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,255,255,.062),transparent 72%);
+}
+body.light .glow{background:radial-gradient(closest-side,rgba(24,32,48,.055),transparent 72%)}
 body.light .hero-bg::after{opacity:.03}
 .grid-lines{
   position:absolute;inset:0;opacity:.5;
@@ -156,10 +158,7 @@ body.light .hero-bg::after{opacity:.03}
   100%{box-shadow:0 0 0 0 transparent}
 }
 .hero h1{font-size:clamp(30px,4.4vw,50px);margin:0 0 20px;font-weight:700}
-.grad{
-  background:linear-gradient(100deg,var(--a1),var(--a2) 58%,var(--c1));
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
+.grad em{font-style:normal;color:var(--c1)}   /* 整句保持近白，只把 CDN 一个词点成青 */
 .lead{font-size:clamp(15.5px,1.6vw,17.5px);color:var(--fg2);max-width:640px;margin:0 0 30px}
 .hero-btns{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:36px}
 .hero-facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;max-width:680px}
@@ -179,11 +178,11 @@ body.light .hero-bg::after{opacity:.03}
 .stack-back.b{top:-25px;transform:scale(.93);opacity:.32}
 .cache-card{
   position:relative;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 97%,transparent),var(--panel));
+  background:var(--panel);
   box-shadow:var(--shadow);
 }
 .cc-sheen{position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(120% 82% at 84% -14%,color-mix(in srgb,var(--a2) 26%,transparent),transparent 62%)}
+  background:radial-gradient(120% 82% at 84% -14%,rgba(255,255,255,.045),transparent 62%)}
 .cc-top{position:relative;display:flex;align-items:center;gap:14px;padding:18px 18px 16px;border-bottom:1px solid var(--line)}
 .cc-icon{position:relative;width:64px;height:64px;flex:0 0 auto;display:grid;place-items:center}
 .cc-icon img{position:relative;width:56px;height:56px;border-radius:15px;box-shadow:0 8px 22px rgba(31,111,235,.35)}
@@ -228,7 +227,7 @@ body.light .hero-bg::after{opacity:.03}
 .sec-head{max-width:770px;margin-bottom:46px}
 .sec-kicker{
   margin:0 0 14px;font-size:12.5px;font-weight:700;letter-spacing:.17em;text-transform:uppercase;
-  background:linear-gradient(90deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent;
+  color:var(--dim);
 }
 .sec-kicker::before{                 /* 分节编号（01…05，按文档顺序自动编号） */
   content:counter(sec,decimal-leading-zero);
@@ -249,9 +248,7 @@ body.light .hero-bg::after{opacity:.03}
 .specs b{
   display:block;font-weight:800;line-height:1.08;letter-spacing:-.02em;
   font-size:clamp(28px,3.4vw,40px);font-variant-numeric:tabular-nums;
-  background:linear-gradient(120deg,var(--a1),var(--a2) 72%,var(--a1));
-  background-size:220% 100%;background-position:0 0;
-  -webkit-background-clip:text;background-clip:text;color:transparent;
+  color:var(--fg);
 }
 .specs b small{font-size:.52em;font-weight:700}
 .specs span{display:block;margin-top:7px;font-size:14.6px;font-weight:600;color:var(--fg2)}
@@ -283,9 +280,9 @@ body.light .seg{background:var(--panel2)}
   padding:7px 14px;border-radius:8px;transition:.16s;white-space:nowrap;
 }
 .seg-btn:hover{color:var(--fg)}
-.seg-btn.active{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;box-shadow:0 3px 12px rgba(31,111,235,.3)}
+.seg-btn.active{background:var(--c1);color:#07272d}
 .auto{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--dim);cursor:pointer;margin-left:auto}
-.auto input{accent-color:var(--a1);width:15px;height:15px;cursor:pointer}
+.auto input{accent-color:var(--c1);width:15px;height:15px;cursor:pointer}
 @media (max-width:560px){
   .seg{width:100%}
   .seg-btn{flex:1 1 auto;text-align:center;padding:7px 8px}
@@ -303,7 +300,7 @@ body.light .seg{background:var(--panel2)}
 .stage-svg .node rect{fill:var(--panel2);stroke:var(--line2);stroke-width:1.6;transition:.2s;
   filter:drop-shadow(0 2px 7px rgba(0,0,0,.3))}
 body.light .stage-svg .node rect{filter:drop-shadow(0 2px 6px rgba(31,41,55,.10))}
-.stage-svg .node.proxy rect{stroke:url(#proxyGrad);stroke-width:2.2;fill:color-mix(in srgb,var(--c1) 13%,var(--panel2))}
+.stage-svg .node.proxy rect{stroke:var(--c1);stroke-width:2.2;fill:color-mix(in srgb,var(--c1) 9%,var(--panel2))}
 .stage-svg .nt{fill:var(--fg);font-size:17px;font-weight:600;text-anchor:middle}
 .stage-svg .ns{fill:var(--dim2);font-size:12.6px;text-anchor:middle}
 .stage-svg .plabel{fill:var(--dim2);font-size:12.4px;text-anchor:middle}
@@ -383,7 +380,7 @@ body.light .loglist{background:var(--panel2)}
 @media (max-width:900px){ .steps{grid-template-columns:minmax(0,1fr)} }
 .step{
   position:relative;padding:26px 23px;border:1px solid var(--line);border-radius:var(--r);
-  background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 93%,transparent),var(--panel));
+  background:var(--panel);
   box-shadow:var(--shadow-sm);transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease;
 }
 .step:hover{transform:translateY(-4px);border-color:var(--hi);box-shadow:var(--shadow)}
@@ -396,8 +393,7 @@ body.light .loglist{background:var(--panel2)}
 @media (max-width:900px){ .step::after{display:none} }
 .step-no{
   display:grid;place-items:center;width:36px;height:36px;border-radius:11px;margin-bottom:15px;
-  background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;font-weight:700;font-size:15px;
-  box-shadow:0 6px 16px color-mix(in srgb,var(--a1) 32%,transparent);
+  background:var(--c1);color:#07272d;font-weight:700;font-size:15px;
 }
 .step h3{margin:0 0 9px;font-size:17px}
 .step p{margin:0;font-size:14.5px;color:var(--dim)}
@@ -416,23 +412,22 @@ body.light .loglist{background:var(--panel2)}
 .feat{
   position:relative;overflow:hidden;padding:24px 22px;
   border:1px solid var(--line);border-radius:var(--r);
-  background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 93%,transparent),var(--panel));
+  background:var(--panel);
   transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease;
 }
 .feat::before{                          /* 悬停时左上角透出一点品牌色 */
   content:"";position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .26s;
-  background:radial-gradient(120% 92% at 6% -12%,color-mix(in srgb,var(--c1) 15%,transparent),transparent 58%);
+  background:radial-gradient(120% 92% at 6% -12%,rgba(255,255,255,.05),transparent 58%);
 }
 .feat:hover{
   transform:translateY(-4px);border-color:var(--hi);
-  box-shadow:0 14px 34px rgba(0,0,0,.34),0 0 0 1px color-mix(in srgb,var(--c1) 16%,transparent);
+  box-shadow:0 14px 34px rgba(0,0,0,.36);
 }
 .feat:hover::before{opacity:1}
-body.light .feat:hover{box-shadow:0 14px 30px rgba(23,35,58,.13),0 0 0 1px color-mix(in srgb,var(--c1) 18%,transparent)}
+body.light .feat:hover{box-shadow:0 14px 30px rgba(23,35,58,.13)}
 .feat-ic{
   display:grid;place-items:center;width:40px;height:40px;border-radius:12px;margin-bottom:14px;
-  background:linear-gradient(135deg,color-mix(in srgb,var(--a1) 16%,transparent),color-mix(in srgb,var(--c1) 20%,transparent));
-  border:1px solid color-mix(in srgb,var(--c1) 32%,transparent);
+  background:var(--panel2);border:1px solid var(--line2);
 }
 .feat-ic svg{width:20px;height:20px;fill:none;stroke:var(--c1);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .feat h3{margin:0 0 8px;font-size:16.5px}
@@ -471,7 +466,7 @@ body.light #urlInput{background:#fff}
   font-size:13px;padding:6px 12px;border-radius:999px;transition:.16s;
 }
 .chip:hover{border-color:var(--c1);color:var(--fg);transform:translateY(-1px)}
-.chip.on{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;border-color:transparent}
+.chip.on{background:var(--c1);color:#07272d;border-color:transparent}
 
 .exp-out{border-top:1px solid var(--line);padding:20px}
 .verdict{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
@@ -495,7 +490,7 @@ body.light .exp-row code{background:var(--panel2)}
 .exp-json{position:relative;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--bg-soft)}
 .exp-json::before{
   content:"";position:absolute;left:0;right:0;top:0;height:2px;opacity:.8;
-  background:linear-gradient(90deg,var(--a1),var(--c1) 62%,transparent);
+  background:linear-gradient(90deg,var(--c1),transparent);
 }
 body.light .exp-json{background:var(--panel2)}
 .exp-json-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--dim)}
@@ -509,7 +504,7 @@ body.light .exp-json{background:var(--panel2)}
 .code .c{color:var(--dim2)}
 .exp-why{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:9px}
 .exp-why li{position:relative;padding-left:22px;font-size:14.2px;color:var(--dim)}
-.exp-why li::before{content:"";position:absolute;left:6px;top:11px;width:6px;height:6px;border-radius:50%;background:var(--a2)}
+.exp-why li::before{content:"";position:absolute;left:6px;top:11px;width:6px;height:6px;border-radius:50%;background:var(--dim2)}
 .exp-why b{color:var(--fg2);font-weight:600}
 
 
@@ -544,7 +539,7 @@ body.light .exp-json{background:var(--panel2)}
 .foot{position:relative;padding:44px 0;background:var(--bg-soft)}
 .foot::before{
   content:"";position:absolute;left:0;right:0;top:0;height:1px;
-  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--a2) 48%,transparent),transparent);
+  background:linear-gradient(90deg,transparent,var(--line2),transparent);
 }
 .foot-inner{display:grid;gap:22px}
 .foot-brand{display:flex;align-items:center;gap:13px}
@@ -587,12 +582,10 @@ main{counter-reset:sec}
 
 /* 首屏光斑缓慢漂移（幅度很小，只是让静止画面有呼吸感） */
 @keyframes drift{
-  0%,100%{transform:translate3d(0,0,0) scale(1)}
-  50%{transform:translate3d(26px,20px,0) scale(1.07)}
+  0%,100%{transform:translateX(-50%) scale(1)}
+  50%{transform:translateX(-50%) translateY(14px) scale(1.05)}
 }
-.g1{animation:drift 30s ease-in-out infinite}
-.g2{animation:drift 38s ease-in-out infinite reverse}
-.g3{animation:drift 46s ease-in-out infinite}
+.glow{animation:drift 42s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){ .glow{animation:none} }
 
 /* 顶栏滚起来后，底边浮出一道渐变发丝线 */
@@ -620,7 +613,7 @@ body.light .exp-json .code{box-shadow:inset 0 1px 6px rgba(23,35,58,.04)}
 .foot::after{
   content:"";position:absolute;left:50%;bottom:-170px;width:680px;height:330px;transform:translateX(-50%);
   pointer-events:none;
-  background:radial-gradient(closest-side,color-mix(in srgb,var(--a2) 22%,transparent),transparent);
+  background:radial-gradient(closest-side,rgba(255,255,255,.05),transparent);
 }
 
 /* 标题断行更好看一些；滚动条与选区跟着主题走 */
@@ -647,22 +640,10 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
     animation-timeline:view();
     animation-range:entry 10% entry 95%;
   }
-  .specs b{
-    animation-name:specSheen;
-    animation-duration:1ms;
-    animation-fill-mode:both;
-    animation-timeline:view();
-    animation-range:entry 12% entry 88%;
-  }
 }
 @keyframes revealIn{
   from{opacity:0;transform:translateY(16px)}
   to{opacity:1;transform:none}
-}
-/* 入场时一道渐变扫过规格数字（渐变两端同色，任何 position 都不会露出空白） */
-@keyframes specSheen{
-  from{background-position:118% 0}
-  to{background-position:0 0}
 }
 @media (prefers-reduced-motion:reduce){
   .reveal{animation:none!important;opacity:1;transform:none}
