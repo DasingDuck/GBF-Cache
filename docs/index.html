@@ -140,11 +140,23 @@
   </div>
 </section>
 
-<!-- ============ 请求演示 ============ -->
-<section class="sec" id="demo">
-  <div class="wrap">
+<!-- ============ 请求演示 ============ --><!-- ============ 工作讲解：左侧竖向步进导航 + 右侧动效面板 ============ -->
+<section class="sec guide" id="guide">
+  <div class="wrap guide-inner">
+    <nav class="guide-nav" aria-label="工作讲解目录">
+      <ul>
+          <li><button type="button" class="g-item is-active" data-panel="demo" aria-selected="true"><i class="g-dot" aria-hidden="true"></i><span class="g-label">请求演示</span></button></li>
+          <li><button type="button" class="g-item" data-panel="how" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">上手</span></button></li>
+          <li><button type="button" class="g-item" data-panel="features" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">特性</span></button></li>
+          <li><button type="button" class="g-item" data-panel="layout" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">缓存布局</span></button></li>
+          <li><button type="button" class="g-item" data-panel="faq" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">常见问题</span></button></li>
+          <li><button type="button" class="g-item" data-panel="disclaimer" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">免责声明</span></button></li>
+      </ul>
+    </nav>
+    <div class="guide-panels">
+        <article class="g-panel is-active" id="demo" data-panel="demo">
     <div class="sec-head">
-      <p class="sec-kicker">交互演示</p>
+      <p class="sec-kicker" data-fig="01">交互演示</p>
       <h2>一次请求都经历了什么</h2>
       <p class="sec-sub">
         点下面三个按钮，看资源请求在本程序里怎么走。左边是路径动画，右边是控制台上真实的五个计数器。
@@ -262,14 +274,10 @@
         </div>
       </aside>
     </div>
-  </div>
-</section>
-
-<!-- ============ 三步用起来 ============ -->
-<section class="sec alt" id="how">
-  <div class="wrap">
+        </article>
+        <article class="g-panel" id="how" data-panel="how">
     <div class="sec-head">
-      <p class="sec-kicker">上手</p>
+      <p class="sec-kicker" data-fig="02">上手</p>
       <h2>三步就能用</h2>
       <p class="sec-sub">不需要装运行库，不需要浏览器插件，也不改动游戏本身。</p>
     </div>
@@ -294,14 +302,10 @@
       <svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M12 8.6v5m0 3.2h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
       <p><b>退出请用托盘菜单里的「退出」，不要强行结束进程。</b>程序启动时会接管一次系统里的上网设置，优雅退出才会把它还原回去。</p>
     </div>
-  </div>
-</section>
-
-<!-- ============ 特性 ============ -->
-<section class="sec" id="features">
-  <div class="wrap">
+        </article>
+        <article class="g-panel" id="features" data-panel="features">
     <div class="sec-head">
-      <p class="sec-kicker">特性</p>
+      <p class="sec-kicker" data-fig="03">特性</p>
       <h2>它凭什么又快又稳</h2>
       <p class="sec-sub">下面每一条都是程序里真实存在的机制，不是宣传词。</p>
     </div>
@@ -348,14 +352,10 @@
           查询串不进文件名，但会记进 <code>.ext</code> 的 <code>q</code> 字段参与命中比对。</p>
       </div>
     </details>
-  </div>
-</section>
-
-<!-- ============ 缓存布局解释器 ============ -->
-<section class="sec alt" id="layout">
-  <div class="wrap">
+        </article>
+        <article class="g-panel" id="layout" data-panel="layout">
     <div class="sec-head">
-      <p class="sec-kicker">动手试试</p>
+      <p class="sec-kicker" data-fig="04">动手试试</p>
       <h2>这条 URL 会被怎么处理</h2>
       <p class="sec-sub">改一改下面的地址，看它落在磁盘哪里、元数据长什么样、会不会被缓存。</p>
     </div>
@@ -392,14 +392,10 @@
         <ul class="exp-why" id="whyList"></ul>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ============ 常见问题 ============ -->
-<section class="sec alt" id="faq">
-  <div class="wrap">
+        </article>
+        <article class="g-panel" id="faq" data-panel="faq">
     <div class="sec-head">
-      <p class="sec-kicker">常见问题</p>
+      <p class="sec-kicker" data-fig="05">常见问题</p>
       <h2>你可能想问的</h2>
     </div>
     <div class="acc" id="acc">
@@ -432,12 +428,8 @@
         <p>不会。它不碰游戏文件、不改游戏代码，只是在游戏和网络之间做一次「有本地副本就先读本地」的选择。</p>
       </details>
     </div>
-  </div>
-</section>
-
-<!-- ============ 免责声明 ============ -->
-<section class="sec" id="disclaimer">
-  <div class="wrap">
+        </article>
+        <article class="g-panel" id="disclaimer" data-panel="disclaimer">
     <div class="disc">
       <div class="disc-head">
         <svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M12 3.5 3.5 20h17zM12 9.5v5m0 2.6h.01"/></svg>
@@ -450,6 +442,8 @@
         <li><b>风险自负。</b>本程序按「现状」提供。使用过程中可能出现的账号、系统或数据方面的问题，由使用者自行承担，作者不提供担保也不承担责任。</li>
         <li><b>请遵守规则。</b>请遵守游戏的服务条款以及你所在地区的相关法律。如果游戏官方明确表示不允许这类做法，请立即停止使用并删除本程序。</li>
       </ol>
+    </div>
+        </article>
     </div>
   </div>
 </section>

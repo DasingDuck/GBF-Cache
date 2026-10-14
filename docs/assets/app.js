@@ -60,6 +60,7 @@
   // 之前是 JS + IntersectionObserver 的写法，一旦回调被节流，内容会卡在 opacity:0 的隐藏态；
   // 纯 CSS 方案没有这个失败模式：不支持的浏览器干脆没有动画，但内容始终可见。
   $$('.sec-head, .demo, .step, .note-card, .feat, .deep, .explorer, .acc, .disc, .specs li')
+    .filter(function (el) { return !el.closest('.guide'); })   // 面板里的交给切换动画
     .forEach(function (el) { el.classList.add('reveal'); });
 
   /* ======================== 3. 请求演示 ======================== */
@@ -511,4 +512,41 @@
 
   render(urlInput.value);
   $$('.exp-presets .chip')[0].classList.add('on');
+
+  /* ======================== 6. 工作讲解：竖向步进导航 ======================== */
+
+  var gItems = $$('.g-item');
+  var gPanels = $$('.g-panel');
+
+  function showPanel(key) {
+    var hit = false;
+    gPanels.forEach(function (pl) {
+      var on = pl.getAttribute('data-panel') === key;
+      pl.classList.toggle('is-active', on);
+      if (on) hit = true;
+    });
+    if (!hit) return false;
+    gItems.forEach(function (b) {
+      var on = b.getAttribute('data-panel') === key;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    return true;
+  }
+
+  gItems.forEach(function (b) {
+    b.addEventListener('click', function () { showPanel(b.getAttribute('data-panel')); });
+  });
+
+  // 顶部导航与页脚里的 #demo / #how … 也要能切到对应面板
+  $$('a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      var key = (a.getAttribute('href') || '').slice(1);
+      if (key) showPanel(key);
+    });
+  });
+  window.addEventListener('hashchange', function () {
+    showPanel(location.hash.slice(1));
+  });
+  if (location.hash) showPanel(location.hash.slice(1));   // 带锚点打开时直接进对应面板
 })();

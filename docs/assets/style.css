@@ -207,6 +207,53 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 @media (prefers-reduced-motion:reduce){ .cc-ring{animation:none;opacity:.7} }
 
 
+/* ==========================================================================
+   工作讲解：左侧竖向步进导航 + 右侧动效面板
+   左：一条竖线串起六个空心点，选中变实心并放大（点与文字同时变大）
+   右：面板用一次短促的淡入上浮切换；不给 fill-mode，动画被打断也停在该有的样子
+   ========================================================================== */
+.guide-inner{display:grid;grid-template-columns:250px minmax(0,1fr);gap:56px;align-items:start}
+.guide-nav{position:sticky;top:92px}
+.guide-nav ul{list-style:none;margin:0;padding:0;position:relative}
+.guide-nav ul::before{                  /* 竖线 */
+  content:"";position:absolute;left:8px;top:15px;bottom:15px;width:1px;background:var(--line2);
+}
+.g-item{
+  position:relative;display:flex;align-items:center;gap:15px;width:100%;
+  padding:10px 0;background:none;border:0;cursor:pointer;text-align:left;
+  color:var(--ink-3);font:500 14.5px/1.25 var(--sans);
+  transition:color .22s ease;
+}
+.g-item:hover{color:var(--ink-2)}
+.g-dot{
+  position:relative;flex:0 0 auto;width:17px;height:17px;border-radius:50%;
+  border:1.5px solid var(--stroke);background:var(--paper);
+  transition:background-color .22s ease,transform .22s ease;
+}
+.g-label{transition:font-size .22s ease}
+.g-item.is-active{color:var(--ink)}
+.g-item.is-active .g-dot{background-color:var(--stroke);transform:scale(1.24)}
+.g-item.is-active .g-label{font-size:16.5px;font-weight:700}
+@media (prefers-reduced-motion:reduce){ .g-dot,.g-label{transition:none} }
+
+.guide-panels{min-width:0}
+.g-panel{display:none}
+.g-panel.is-active{display:block;animation:panelIn .36s cubic-bezier(.2,.7,.3,1)}
+/* 起手只压到 25% 不透明度：万一动画被打断，内容仍看得见 */
+@keyframes panelIn{from{opacity:.25;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){ .g-panel.is-active{animation:none} }
+
+@media (max-width:900px){
+  .guide-inner{grid-template-columns:minmax(0,1fr);gap:26px}
+  .guide-nav{position:static}
+  .guide-nav ul{display:flex;gap:4px;overflow-x:auto;padding:2px 0 10px}
+  .guide-nav li{flex:0 0 auto}              /* 不收缩，否则标签会被挤成竖排 */
+  .guide-nav ul::before{display:none}       /* 横排时不要竖线 */
+  .g-item{width:auto;padding:8px 16px 8px 0}
+  .g-label{white-space:nowrap}
+  .g-item.is-active .g-label{font-size:15.5px}
+}
+
 /* ---------- 区块外壳 ---------- */
 .sec{padding:86px 0;border-bottom:1px solid var(--line);background-color:rgba(255,255,255,.58)}
 .sec.alt{background-color:rgba(255,255,255,.74)}
@@ -216,7 +263,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
   color:var(--dim);
 }
 .sec-kicker::before{                 /* 分节编号（01…05，按文档顺序自动编号） */
-  content:counter(sec,decimal-leading-zero);
+  content:attr(data-fig);   /* 显式编号：计数器对 display:none 的面板不计，只能写死 */
   display:inline-block;vertical-align:middle;margin:0 11px 1px 0;padding-right:11px;
   border-right:1px solid color-mix(in srgb,var(--a2-ink) 28%,var(--line2));
   color:var(--a1-ink);   /* 只有 12px，渐变看不出来，直接用加深版的浅青 */
@@ -566,8 +613,6 @@ body::after{
 .btn:not(.primary){box-shadow:var(--inner)}
 
 /* 分节计数：main 里每个 .sec 自增，标题前缀用它 */
-main{counter-reset:sec}
-.sec{counter-increment:sec}
 
 /* 浅色区块的上边缘加一道渐隐发丝线，分隔更干净 */
 .sec.alt{position:relative}
