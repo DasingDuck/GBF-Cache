@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "碧蓝幻想本地缓存程序",
+  "version": "2.1.1",
+  "description": "让碧蓝幻想资源从本机缓存读取。v2.1.1：周期跟随服务端 PAC；代理控制权被其他扩展抢占时在图标上提示。",
+  "minimum_chrome_version": "101",
+  "permissions": [
+    "proxy",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8799/*"
+  ],
+  "background": {
+    "service_worker": "sw.js"
+  },
+  "action": {
+    "default_title": "碧蓝幻想本地缓存程序"
+  }
+}

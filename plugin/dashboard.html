@@ -1,0 +1,2156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>碧蓝幻想本地缓存程序</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232c; --line:#262d38;
+    --fg:#e6edf3; --fg2:#c9d1d9; --dim:#8b949e; --dim2:#6e7681;
+    --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#58a6ff; --store:#a371f7;
+    --stamp:#d29922;   /* 版本戳徽标：深浅两套主题视觉一致（浅色下单独加深） */
+    --inset:#0b0e13; --hover:#232c37; --hoverline:#39424f;
+  }
+  /* 白色主题（V4.15.3 建；V4.15.7 按用户要求反转：功能区=灰 #f6f8fa、按钮/内嵌=白，
+     页面底色加深为 #e9edf2 防与功能区同色）。body.light 覆盖变量 + 修正少量深色专属写死的颜色。
+     偏好存本浏览器（localStorage），不进服务端配置 —— 外观是每台浏览器自己的事。 */
+  body.light{
+    --bg:#e9edf2; --panel:#f6f8fa; --panel2:#ffffff; --line:#d0d7de;
+    --fg:#141721; --fg2:#24292f; --dim:#4b535c; --dim2:#59636e;
+    --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#0969da; --store:#8250df;
+    --stamp:#d97706;   /* 浅色下用橙黄金（用户指定），深色主题保持金色 */
+    --inset:#ffffff; --hover:#eaeef2; --hoverline:#d0d7de;
+  }
+  body.light .lg:hover{background:var(--hover)}
+  body.light button:hover,body.light .btn:hover{background:var(--hover);border-color:var(--hoverline)}
+  body.light .kv{border-bottom-color:#eaeef2}
+  body.light .switch{background:#d8dee4;border-color:#d0d7de}
+  body.light .switch::after{background:#fff}
+  /* 浅色下的选中态要压过上面那条覆盖（特异性更高），否则开着的滑块会显示成灰的 */
+  body.light .switch[aria-checked="true"]{background:#1f6feb;border-color:#1f6feb}
+  body.light .switch[aria-checked="true"]::after{left:20px;background:#fff}
+  body.light .lg.WARN{background:rgba(154,103,0,.10)}
+  body.light .lg.ERR{background:rgba(207,34,46,.08)}
+  /* 浅色下的主按钮换淡蓝（高饱和蓝在白底上刺眼）；换肤瞬间禁用所有过渡防闪烁 */
+  body.light button.primary{background:#d3e4fd;border-color:#a8c7fa;color:#0b57d0}
+  body.light button.primary:hover{background:#c2d9fc}
+  body.theme-fading *{transition:none!important}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+    display:flex; flex-direction:column;
+  }
+  a{color:var(--info);text-decoration:none} a:hover{text-decoration:underline}
+
+  /* 顶栏 */
+  header{
+    display:flex;align-items:center;gap:14px;
+    padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel);
+    flex:0 0 auto;
+  }
+  .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#1f6feb,#a371f7);
+    display:grid;place-items:center;font-weight:700;font-size:14px;flex:0 0 auto}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px}
+  header .sub{font-size:12px;color:var(--dim2)}
+  .spacer{flex:1}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .dot.off{background:var(--err);box-shadow:0 0 8px var(--err)}
+  .dot.idle{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+  .status{font-size:12.5px;display:flex;align-items:center;color:var(--dim)}
+
+  /* 主体。V4.8.6：回到"正常文档流 + 每行等宽列"的常规布局。
+     ─────────────────────────────────────────────────────────────
+     为什么不继续用 V4.8.5 那版整屏网格：它把整页塞进一个 viewport 高度的网格、并给 main 加了
+     `overflow:hidden`，于是**窗口一小、行高就被压成视口的一小部分**，而每张卡又各自
+     `overflow:auto` —— 结果就是文字挤压错位、边界全乱。教训：
+     **不要用视口高度去强行分配卡片高度**；页面该滚就滚，卡片该多高就多高。
+     现在的规矩（四条，改这个文件时请一起守住）：
+       ① 卡片保持**自然高度**，同一行里靠网格默认的 stretch **等高对齐** → 上下边界都齐，
+          而且因为行高 = 该行最高那张卡的内容高，**任何卡都不会被压扁、也不会被裁**；
+       ② 卡片一律**不裁剪内容**（不给 `.card` 加 overflow）→ 内容永远完整可读；
+       ③ 每行用**等宽列**（`repeat(n,minmax(0,1fr))`）→ 同一行里的卡片左右边界严格对齐；
+       ④ 需要"有上界"的只有日志区本身（固定高度 + 自己滚动），**不是**靠压缩整个页面来实现。 */
+  main{flex:1;overflow:auto;padding:16px 18px 28px;display:flex;flex-direction:column;gap:14px}
+  .row{display:grid;gap:14px}
+  .row.cards{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  /* 一行两栏：左栏比右栏略宽（日志/排查在左，概况在右）。两栏各自是"竖着排的卡片列"，
+     这样一栏里可以放多张卡，而栏与栏的顶边严格对齐。 */
+  .row.two{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}
+  .row.two > div{display:flex;flex-direction:column;gap:14px;min-width:0}
+  /* 每栏的**最后一张卡**撑满该栏 → 该栏的底边就是卡片底边。
+     V4.14.15 起「使用与排查」整卡删除，左栏只剩日志卡（自带 flex:1，见 logWrap）；
+     这条 last-child 规则保留给右栏的「最近错误」——错误出现时它撑满剩余高度。 */
+  .row.two > div > .card:last-child{flex:1}
+  /* V4.14.14：三列改两列 —— 原第三列（系统代理）内容少，把左列（缓存构成）
+     拉出一大块空白（用户圈红框反馈"空间太大、系统代理挪进来、底部平齐"）。
+     现在左列 = 缓存构成 + 系统代理 上下堆叠，右列 = 命中来源 + 按类型清理；
+     两列的末卡 flex:1 撑满本栏，功能区底部平齐。 */
+  .row.three{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .row.three > div{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .row.three > div > .card:last-child{flex:1}
+  @media(max-width:900px){.row.two,.row.three{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+  .card h2{font-size:12px;margin:0 0 10px;color:var(--dim);font-weight:600;letter-spacing:.6px;text-transform:uppercase}
+
+  /* 指标卡 */
+  .metric{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;position:relative;overflow:hidden}
+  .metric:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--dim2)}
+  .metric.hit:before{background:var(--ok)}
+  .metric.miss:before{background:var(--info)}
+  .metric.store:before{background:var(--store)}
+  .metric.dyn:before{background:var(--warn)}
+  .metric.err:before{background:var(--err)}
+  .metric .k{font-size:11.5px;color:var(--dim);letter-spacing:.4px}
+  .metric .v{font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.25;margin-top:2px}
+  .metric .n{font-size:11px;color:var(--dim2)}
+  .metric.alert .v{color:var(--warn)}
+  .metric.danger .v{color:var(--err)}
+
+  /* 日志。V4.8.6：回到**固定高度**（360px）—— 这是最简单也最可控的"有上界"。
+     沿革别再重犯：V4.8.3 用 `flex:1` 却没上界 → 高度由同行右栏决定、越长越长；
+     V4.8.5 改成由视口高度决定 → 窗口一小就被压扁、文字错位。
+     固定 360px 配 `align-items:start`（见 .row）**不会**留下空白：卡片高度就等于自身内容高。 */
+  #logWrap{max-height:none}
+  #log{height:400px;overflow:auto;font:12px/1.65 Consolas,"Cascadia Mono",monospace;
+    background:var(--inset);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  /* ⚠️ 不要把 #log 改成 flex:1 弹性高度（V4.14.15 试过、V4.14.16 回退）：
+     弹性链条里容器高度由内容参与决定，日志越多卡片越长 —— 表现为日志卡
+     "无限向下拉伸"。固定高度 + overflow:auto 才是这套布局的正确形态。 */
+  .lg{display:flex;gap:9px;white-space:nowrap;padding:1px 0;border-radius:3px}
+  .lg:hover{background:var(--hover)}
+  .lg .t{color:var(--dim2);flex:0 0 auto}
+  .lg .tag{flex:0 0 52px;font-weight:700;font-size:11px}
+  .lg .p{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+  .lg .s{color:var(--dim2);flex:0 0 auto}
+  .tag.HIT{color:var(--ok)} .tag.MISS{color:var(--info)} .tag.STORE{color:var(--store)}
+  .tag.WARN{color:var(--warn)} .tag.ERR{color:var(--err)}
+  .lg.WARN{background:rgba(210,153,34,.09)} .lg.ERR{background:rgba(248,81,73,.11)}
+
+  /* 按钮 */
+  .btns{display:flex;gap:8px;flex-wrap:wrap}
+  /* 动作面板里的分组竖线（V4.14.13）：把"自启 / 悬浮窗 / 排障"三组开关在视觉上分开 */
+  .vsep{width:1px;align-self:stretch;background:var(--line);margin:0 6px}
+  /* 设置面板（V4.15.2）：页眉齿轮弹出，滑块开关（aria-checked 驱动外观） */
+  .gear{font-size:15px;padding:5px 11px}
+  #settingsPanel{position:fixed;top:60px;right:14px;z-index:120;width:350px;max-width:92vw;padding:8px 14px 12px}
+  /* 面板装配状态（数据到位前）：禁用内部过渡，滑块不会当着用户的面从"关"滑到"开" */
+  #settingsPanel.populating *{transition:none!important}
+  .setGroup{font-size:11px;color:var(--dim);letter-spacing:.6px;margin:10px 0 2px;border-bottom:1px solid var(--line);padding-bottom:3px}
+  .setRow{display:flex;align-items:center;gap:10px;padding:7px 0}
+  .setName{flex:1;font-size:12.5px;color:var(--fg2)}
+  .switch{position:relative;width:40px;height:22px;min-width:40px;border-radius:11px;background:#39424f;border:1px solid #4a5568;transition:.15s;padding:0}
+  .switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#8b949e;transition:.15s}
+  .switch[aria-checked="true"]{background:#1f6feb;border-color:#1f6feb}
+  .switch[aria-checked="true"]::after{left:20px;background:#fff}
+  .switch:disabled{opacity:.45;cursor:not-allowed}
+  .mini{font-size:11.5px;padding:3px 8px}
+  .mini.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+  body.light .mini.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+  .setHead{margin:2px 0 4px}
+  .setHead b{font-size:13.5px;color:var(--fg)}
+  .setHead span{display:block;font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.5}
+  /* V4.15.5：按钮不再带颜色过渡动画（用户反馈悬停渐变观感眩晕）——
+     悬停变色保持瞬时切换。要给哪类元素加过渡，先想清楚它会不会被鼠标反复扫过。 */
+  button,.btn{font:inherit;font-size:12.5px;padding:6px 12px;border-radius:7px;cursor:pointer;
+    background:var(--panel2);color:var(--fg);border:1px solid var(--line)}
+  button:hover,.btn:hover{background:var(--hover);border-color:var(--hoverline)}
+  button.primary{background:#1f6feb;border-color:#1f6feb}
+  button.primary:hover{background:#2b7cf0}
+
+  /* 缓存信息 */
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv:last-child{border-bottom:none}
+  .kv .k{color:var(--dim)}
+  .kv .v{font-variant-numeric:tabular-nums;text-align:right}
+  .bars{margin-top:10px;display:flex;flex-direction:column;gap:7px}
+  .bar .bl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);margin-bottom:3px}
+  .bar .bt{height:6px;background:var(--inset);border-radius:4px;overflow:hidden}
+  .bar .bf{height:100%;background:linear-gradient(90deg,#1f6feb,#58a6ff);border-radius:4px}
+  .bar .bf.alt{background:linear-gradient(90deg,#8957e5,#a371f7)}
+
+  /* 提示与说明 */
+  .hint{border-left:3px solid var(--info);background:rgba(88,166,255,.07);
+    padding:9px 12px;border-radius:0 7px 7px 0;font-size:12.5px;color:var(--fg2)}
+  .hint.warn{border-color:var(--warn);background:rgba(210,153,34,.08)}
+  .hint.err{border-color:var(--err);background:rgba(248,81,73,.08)}
+  .hint.ok{border-color:var(--ok);background:rgba(63,185,80,.08)}
+  code{background:var(--inset);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px;
+    font-family:Consolas,monospace}
+  details{margin-top:4px} summary{cursor:pointer;color:var(--dim);font-size:12.5px;outline:none}
+  details[open] summary{margin-bottom:8px}
+  details ol{margin:6px 0 0;padding-left:22px;font-size:12.5px;color:var(--fg2)}
+  details li{margin:4px 0}
+  .muted{color:var(--dim2);font-size:12px}
+</style>
+</head>
+<body>
+<script>/* 白色主题尽早套用，避免先深后白的闪一下（V4.15.3） */
+try{if(localStorage.getItem('gbfTheme')==='light')document.body.classList.add('light')}catch(e){}</script>
+
+<header>
+  <div class="logo">GBF</div>
+  <div>
+    <h1>碧蓝幻想本地缓存程序 <span id="verBadge" style="font-size:12px;vertical-align:2px;color:var(--dim);font-weight:normal;border:1px solid var(--line);border-radius:6px;padding:1px 8px">V—</span></h1>
+    <div class="sub" id="subline">正在连接服务…</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="status" style="margin-right:18px">
+    <span class="dot idle" id="extDot"></span><span id="extTxt">检测中…</span>
+  </div>
+  <div class="status"><span class="dot idle" id="liveDot"></span><span id="liveTxt">连接中</span></div>
+  <button id="btnSettings" class="gear" title="功能设置" onclick="toggleSettings(event)">⚙ 设置</button>
+</header>
+
+  <!-- 设置面板（V4.15.2）：页眉齿轮弹出。滑块立即生效并保存；打开时从 /api/settings
+       拉一遍真实状态（含开机自启的注册表实况）。点面板外 / Esc 收起。
+       注意：tglFloat / btnBypass / btnFloatNow 这几个 id 被自测与渲染函数钉住，别改名。 -->
+  <div id="settingsPanel" class="card" style="display:none" onclick="event.stopPropagation()">
+    <div class="setHead"><b>功能设置</b><span>拨动滑块立即生效并自动保存；把鼠标悬停在功能名上可以看详细说明。</span></div>
+    <div class="setGroup">启动</div>
+    <div class="setRow"><span class="setName" title="写入/移除系统启动项（当前用户），卸载程序会自动清理">开机自动启动程序</span><button class="switch" id="swAutoStart" onclick="setFeature('autoStartWithWindows', this)" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName">自动启动游戏</span><button class="switch" id="swAutoGame" onclick="toggleAutoLaunch('game')" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName">自动启动加速器</span><button class="switch" id="swAutoAccel" onclick="toggleAutoLaunch('accel')" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName" title="关闭后从托盘菜单或双击 exe 手动打开">启动后打开控制台</span><button class="switch" id="swOpenDash" onclick="setFeature('openDashboardOnStart', this)" aria-checked="false"></button></div>
+    <div class="setGroup">缓存</div>
+    <div class="setRow"><span class="setName" title="安静=纯按需（2026-10-14 实测：更新日首屏会明显变慢）；平衡（默认）=跟随式小预热，游戏触碰哪个目录就把该目录其余文件提前确认过户；积极=平衡 + 全库预热">更新日模式</span><span><button class="mini" id="modeQuiet" onclick="setPrewarmMode('quiet')">安静</button> <button class="mini" id="modeBalanced" onclick="setPrewarmMode('balanced')">平衡</button> <button class="mini" id="modeAggressive" onclick="setPrewarmMode('aggressive')">积极</button></span></div>
+    <div class="setRow"><span class="setName" title="按需过户成功后，在后台把同一目录里其余文件也提前确认过户（只涉及游戏已触碰过的目录）——更新日首屏的削峰手段（真正防卡死的是迁移的 2 秒预算）">跟随式小预热</span><button class="switch" id="swFollow" onclick="setFeature('followEnabled', this)" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName" title="对新版本做全库核对过户（更新日省流量的老档位；比跟随式更主动，属积极档）。默认关">版本更新自动预热（全库）</span><button class="switch" id="swPrewarm" onclick="setFeature('prewarmEnabled', this)" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName" title="开启后预热只做确认过户，不再把可能有变化的文件提前下载（可避免版本戳无限膨胀）">预热只过户、不预下载</span><button class="switch" id="swMigrateOnly" onclick="setFeature('prewarmMigrateOnly', this)" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName" title="自动清掉超出保留策略（最新 2 个 + 在用）的旧版本戳目录">自动清理过期版本戳</span><button class="switch" id="swAutoEvict" onclick="setFeature('autoEvictStamps', this)" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName" title="游戏更新开始/完成预热时，托盘弹出提醒气泡">游戏更新提醒气泡</span><button class="switch" id="swNotify" onclick="setFeature('prewarmNotify', this)" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName">缓存功能<span class="muted" id="cacheStateNote"></span></span><button class="switch" id="btnBypass" onclick="togglePacBypass(this)" aria-checked="false"></button></div>
+    <div class="setGroup">悬浮窗</div>
+    <div class="setRow"><span class="setName">关控制台后显示悬浮窗</span><button class="switch" id="tglFloat" onclick="toggleFloat()" aria-checked="false"></button><button class="mini" id="btnFloatNow" onclick="toggleFloatNow()">立即显示</button></div>
+    <div class="setGroup">外观</div>
+    <div class="setRow"><span class="setName" title="只影响本浏览器上的控制台外观；偏好保存在浏览器里">白色主题</span><button class="switch" id="swLightTheme" onclick="toggleTheme(this)" aria-checked="false"></button></div>
+  </div>
+
+<main>
+
+  <!-- 工作状态提示条 -->
+  <div id="banner" class="hint">正在检测缓存接管状态…</div>
+
+  <!-- 更新日预热进度条（V4.14.11）：SSE 'prewarm' 事件驱动，平时隐藏 -->
+  <div id="prewarmToast" class="hint" style="display:none"></div>
+
+  <!-- ═══ 动作面板（V4.14.13 重排）═════════════════════════════════════════
+       以前「启动 / 自启 / 悬浮窗」各占一行、测试与诊断按钮又散在各张卡片里；
+       现在收拢成一张面板：第一行 = 高频主操作（启动游戏 / 启动加速器），
+       第二行 = 日常开关（自启 / 悬浮监控窗 / 暂停缓存）。竖线是分组。
+       各功能卡片里只保留与该卡片语境直接相关的动作（清理版本戳、按类型清理、
+       探测加速器、更改目录）；测试与诊断类工具全部集中在下方「维护与诊断」卡。 -->
+  <!-- 启动游戏默认用系统默认浏览器打开（系统 PAC 已分流，资源进缓存、接口直连）；
+       V4.5.0 起也可以在 ⚙ 里指定任意程序，届时会把游戏 URL 当参数传给它。
+       注意与 V4.3.6 移除的「独立窗口」模式不同：那个只对 Edge 有效、还要维护一份独立浏览器
+       profile；这里只是换个程序去打开同一个 URL，缓存照样靠系统 PAC 生效。 -->
+  <div class="card" style="margin:2px 0 14px">
+    <div class="btns" style="margin:0">
+      <button id="btnLaunchGame" class="primary" style="font-size:14px;padding:9px 18px" onclick="launchGame(this)">▶ 启动游戏</button>
+      <button id="btnGameGear" style="align-self:center;padding:6px 10px" title="自定义用来打开游戏的程序（默认：系统默认浏览器）" onclick="toggleGameEdit()">⚙</button>
+      <button id="btnAccel" style="align-self:center" title="启动加速器（通用：启动 ⚙ 里选的任意 exe）" onclick="launchAccelerator(this)">⚡ 启动加速器</button>
+      <button id="btnAccelGear" style="align-self:center;padding:6px 10px" title="自定义加速器 exe 路径" onclick="toggleAccelEdit()">⚙</button>
+      <span class="muted" id="launchGameHint" style="align-self:center"></span>
+    </div>
+    <!-- V4.15.2：自启 / 悬浮窗 / 排障三组开关已挪进页眉齿轮的「设置」面板（滑块形式），
+         这里只留高频主操作 —— 动作面板从两行收缩为一行。 -->
+    <div id="accelEditRow" style="display:none;margin-top:10px">
+      <div class="btns">
+        <input id="accelPathInput" type="text" readonly="readonly" style="flex:1;min-width:280px;font:inherit;font-size:12.5px;padding:6px 10px;border-radius:7px;border:1px solid var(--line);background:#0d1117;color:var(--fg2);cursor:pointer" placeholder="加速器 exe 完整路径（点输入框或「浏览…」选择）" onclick="browseAccelFile()" />
+        <button onclick="browseAccelFile()" id="btnAccelBrowse">浏览…</button>
+        <button class="primary" onclick="saveAccelPath()">保存</button>
+        <button onclick="toggleAccelEdit(false)">取消</button>
+      </div>
+    </div>
+
+    <div id="gameEditRow" style="display:none;margin-top:10px">
+      <div class="btns">
+        <input id="gamePathInput" type="text" readonly="readonly" style="flex:1;min-width:280px;font:inherit;font-size:12.5px;padding:6px 10px;border-radius:7px;border:1px solid var(--line);background:#0d1117;color:var(--fg2);cursor:pointer" placeholder="打开游戏用的程序（留空 = 系统默认浏览器；点输入框或「浏览…」选择）" onclick="browseGameFile()" />
+        <button onclick="browseGameFile()" id="btnGameBrowse">浏览…</button>
+        <button class="primary" onclick="saveGamePath()">保存</button>
+        <button onclick="clearGamePath()" title="清空该路径，回到「用系统默认浏览器打开」">清空</button>
+        <button onclick="toggleGameEdit(false)">取消</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:6px">选定后，程序会被这样调用：
+        <code>你选的程序 https://game.granbluefantasy.jp/</code>（工作目录取该程序所在目录）。
+        不指定就用系统默认浏览器 —— 两种方式的缓存效果一样，都靠系统 PAC 分流。</div>
+    </div>
+  </div>
+
+  <!-- 指标卡 -->
+  <div class="row cards">
+    <div class="metric hit"><div class="k">缓存命中</div><div class="v" id="mHit">0</div><div class="n">未联网，直接读盘</div></div>
+    <div class="metric miss"><div class="k">回源下载</div><div class="v" id="mMiss">0</div><div class="n">缓存没有，已取源站</div></div>
+    <div class="metric store"><div class="k">新写入缓存</div><div class="v" id="mStore">0</div><div class="n">本次新增到硬盘</div></div>
+    <div class="metric dyn" id="cardDyn"><div class="k">异常拦截</div><div class="v" id="mDyn">0</div><div class="n">正常应始终为 0</div></div>
+    <div class="metric err" id="cardErr"><div class="k">错误</div><div class="v" id="mErr">0</div><div class="n">读盘 / 回源失败</div></div>
+  </div>
+
+  <div class="row two">
+
+    <!-- 左栏：实时请求日志（V4.14.15 起「使用与排查」整卡删除，其核心提醒挪到页面底部落款）。 -->
+    <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+
+    <div class="card" id="logWrap">
+      <h2 style="display:flex;align-items:center;gap:10px">
+        <span>实时请求日志</span>
+        <span class="spacer" style="flex:1"></span>
+        <span class="muted" id="logHint">自动滚动</span>
+      </h2>
+      <div id="log"></div>
+      <div class="btns" style="margin-top:10px">
+        <button onclick="clearLogView()">清空显示</button>
+        <button onclick="toggleFollow(this)" data-follow="1" class="primary">暂停滚动</button>
+        <button onclick="runSelfTest()">运行自检</button>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- 右侧：缓存概况 + 帮助 -->
+    <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+
+      <!-- V4.14.14：不再强制 flex:1 拉伸 —— 右栏内容短时这里会留出一大块空白
+           （用户圈红框反馈）。现在贴内容走，与左栏的底部对齐由**左栏日志卡弹性填充**完成。 -->
+      <div class="card">
+        <h2>缓存库概况</h2>
+        <div class="kv"><span class="k">资源文件数</span><span class="v" id="cFiles">扫描中…</span></div>
+        <div class="kv"><span class="k">占用体积</span><span class="v" id="cSize">—</span></div>
+        <div class="kv"><span class="k">上次扫描</span><span class="v" id="cScanAt">—</span></div>
+        <div class="bars" id="cBars"></div>
+
+        <!-- 缓存构成 / 命中来源 / 按类型清理 三块已移到下面的独立卡片（V4.8.3 重新分配布局） -->
+
+        <h2 style="margin-top:16px">缓存目录</h2>
+        <div class="kv">
+          <span class="k">当前位置</span>
+          <span class="v" id="cRoot" style="font-size:12px;word-break:break-all">—</span>
+        </div>
+        <div class="kv">
+          <span class="k">状态</span>
+          <span class="v" id="cState">—</span>
+        </div>
+        <div id="cRootWarn" class="hint warn" style="display:none;margin-top:10px;font-size:12px"></div>
+
+        <!-- 系统代理（与加速器共存）整块已移到下面的独立卡片（V4.8.3 重新分配布局） -->
+
+        <!-- 更改目录：默认收起，点「更改」才展开 -->
+        <div id="rootEdit" style="display:none;margin-top:10px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:8px">
+          <div class="muted" style="margin-bottom:6px">输入新目录路径（不存在会自动创建）</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input id="rootInput" type="text" spellcheck="false"
+                   style="flex:1;min-width:180px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font:12px Consolas,monospace">
+            <button onclick="browseFolder()" id="btnBrowse">浏览…</button>
+            <button onclick="saveCacheRoot()" class="primary" id="btnSaveRoot">保存</button>
+            <button onclick="toggleRootEdit(false)">取消</button>
+          </div>
+          <div id="rootMsg" class="muted" style="margin-top:8px"></div>
+        </div>
+
+        <!-- V4.14.13：测试写入 / 测试完整缓存 / 重新扫描 / 重新检测接管 / 自检页 / 原始数据 /
+             导出诊断包 这些工具类按钮已全部收进下方「维护与诊断」卡，这里只留与缓存目录
+             语境直接相关的「更改目录」。 -->
+        <div class="btns" style="margin-top:12px">
+          <button onclick="toggleRootEdit(true)">更改目录</button>
+        </div>
+
+        <div id="cEmptyTip" class="hint warn" style="display:none;margin-top:10px;font-size:12px">
+          <b>新目录文件很少？这通常不是故障。</b><br>
+          浏览器自己有 HTTP 缓存：资源已经存在 Edge 里，游戏就不会再发起网络请求，
+          自然也不会写入这个目录。想让它快速填充，可以：
+          <br>① 在 Edge 里清一次「缓存的图像和文件」（设置 → 隐私 → 清除浏览数据）；
+          <br>② 或在游戏页面按 <code>Ctrl+Shift+R</code> 强制刷新；
+          <br>③ 或去游戏里打开一张没进过的关卡。
+          <br>点「测试完整缓存」（在下方「维护与诊断」卡里）可以立刻验证写入链路是否正常。
+        </div>
+      </div>
+
+      <div class="card" id="errCard" style="display:none">
+        <h2>最近错误</h2>
+        <div id="errList" style="font:12px/1.7 Consolas,monospace;color:var(--err);word-break:break-all"></div>
+      </div>
+
+      <!-- 右栏：缓存库概况 + 最近错误（隐藏，出错才显示；显示时撑满剩余高度）。 -->
+    </div>
+  </div>
+
+  <!-- ============================================================
+       V4.14.14 重排（用户反馈：三列时"缓存构成"被拉出一大块空白）：
+         · 左列 = 缓存构成 + 系统代理 上下堆叠 —— 系统代理正好填进原来的空白
+         · 右列 = 命中来源分布 + 按类型清理
+       两列的末卡 flex:1 撑满本栏 → 功能区底部平齐（见 .row.three 的 CSS 注释）。
+       分组依据（V4.8.3 起）：左边讲缓存里有什么 + 本机网络接管状态，
+       右边讲请求从哪来 + 怎么清理。ID 与 onclick 全部保持不变，只是换了位置。
+       ============================================================ -->
+  <div class="row three">
+
+    <div>
+      <div class="card">
+        <h2>缓存构成（按目录 / 版本戳）</h2>
+        <div id="groupRows" style="font-size:12px"></div>
+        <div class="muted" id="groupTip" style="font-size:11.5px;margin-top:6px"></div>
+        <div class="btns" style="margin-top:8px">
+          <button onclick="evictStamps()" id="btnEvict">清理过期版本戳</button>
+        </div>
+        <div class="muted" id="evictMsg" style="font-size:11.5px;margin-top:6px"></div>
+      </div>
+
+      <div class="card">
+        <h2>系统代理（与加速器共存）</h2>
+        <div class="kv">
+          <span class="k">自动配置脚本</span>
+          <span class="v" id="pacState">—</span>
+        </div>
+        <div class="kv">
+          <span class="k">其余流量去向</span>
+          <span class="v" id="pacUpstream" style="font-size:12px;word-break:break-all">—</span>
+        </div>
+        <!-- 本机代理失效时只在这行下面挂一句**很短的补注**（V4.8.4）。
+             沿革：最早是 `hint warn` 的常驻警告横幅 → V4.8.1 改成"安静的一行" →
+             用户仍反馈"怎么还在提示"。根因是我没想透：这是个**永久性**的背景事实
+             （残留端口不会自己消失），**只要它单独占一行，就会永远占着屏幕**。
+             所以现在它降级成「其余流量去向」这行的补注 —— 它是**状态**，不是待办事项。
+             详细排查建议留在服务端日志里（`logs\server.log` 的 `[链路]` 行），
+             界面上只留最短的事实，且不含任何催促式措辞。 -->
+        <div class="muted" id="chainNote" style="display:none;font-size:11.5px;margin-top:-4px"></div>
+        <div class="kv">
+          <span class="k">回源是否经加速器</span>
+          <span class="v" id="pacChain">—</span>
+        </div>
+        <div class="btns" style="margin-top:10px">
+          <button onclick="probeUpstream()" id="btnProbeUp">探测加速器代理</button>
+          <!-- V4.14.13：「暂停缓存（临时直连）」已收进顶部动作面板的排障组 -->
+        </div>
+        <div class="muted" id="pacProbeTip" style="font-size:12px;margin-top:6px"></div>
+        <!-- 静态说明（V4.12.2 新增）。为什么需要它 ——
+             有些加速器是**按进程**做加速的（把钩子 DLL 注入目标进程，而不是整机路由或系统代理）。
+             本程序接管缓存后，资源请求由浏览器转到了本进程，回源也随之变成由本进程发出；
+             如果本进程不在那个加速器的加速名单里，资源回源就走不到加速线路上 ——
+             表现为「缓存能用（数字在涨），但游戏加载/更新并不快」。
+             它与上面那条探测提示是两回事：那条讲「探测到的本机代理」，这条讲「加速器的名单」，
+             所以单独占一行、写成静态文案，不做成动态提示。 -->
+        <div class="muted" style="font-size:11.5px;margin-top:8px;line-height:1.5">
+          若无法缓存加速并用，可尝试在加速器中将本程序选作加速对象（通常为手动设置启动游戏路径）。
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>命中来源分布</h2>
+        <div class="kv"><span class="k">本地缓存命中</span><span class="v" id="srcHit">—</span></div>
+        <div class="kv"><span class="k">回源</span><span class="v" id="srcUp">—</span></div>
+        <div class="kv"><span class="k">到达代理的命中率</span><span class="v" id="srcRate">—</span></div>
+        <div class="kv"><span class="k">回源耗时 P50 / P95 / P99</span><span class="v" id="originLatency">—</span></div>
+        <div class="muted" id="srcTip" style="font-size:11.5px;margin-top:6px"></div>
+        <div class="muted" id="xvBox" style="font-size:11.5px;margin-top:6px"></div>
+
+        <div id="cleanBox" style="display:none;margin-top:12px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:8px">
+          <div style="font-size:12.5px;color:var(--fg2);margin-bottom:6px">
+            <b>按类型清理缓存</b>　<span class="muted">点某一类的「清理」会删掉该类全部已缓存文件
+            （游戏下次需要时会重新回源）。<b>删除不可撤销</b>，缓存本来就只是加速用的。</span>
+          </div>
+          <div id="cleanRows" style="font-size:12px"></div>
+          <div id="cleanMsg" class="muted" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>更新日</h2>
+        <div class="kv"><span class="k">档位</span><span class="v" id="udMode">—</span></div>
+        <div class="kv"><span class="k">过户（核对 / 复用 / 重下）</span><span class="v" id="udMigrate">—</span></div>
+        <div class="kv"><span class="k">跟随式小预热（在途 / 排队 / 已确认）</span><span class="v" id="udFollow">—</span></div>
+        <div class="muted" id="udReport" style="font-size:11.5px;margin-top:6px">还没有战报：下次游戏更新、安静下来后会自动生成。</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ 维护与诊断（V4.14.13）═══════════════════════════════════════════
+       把散在各卡片里的测试 / 诊断类按钮全部收进这一张：
+       一键体检（探针 + PAC 分流判定 + 证书，问题直接给一键修复）、诊断包导出、
+       缓存写入 / 完整链路测试、重新扫描、接管检测、自检页与原始数据入口。
+       以前它们分住在「缓存库概况」（测试写入/完整缓存/重新扫描/接管检测/自检页/
+       原始数据/导出诊断包）和独立的「一键体检」卡里，找起来要满页扫。 -->
+  <!-- 一键体检原理（V4.14.8）：探针图在源站不存在，能加载 = 资源请求确实到了本机缓存服务；
+       PAC 判定在本页就地求值；其余各项直接读 /api/stats。证书有问题时给「一键修复」按钮
+       （POST /api/cert-fix，只动当前用户存储、无需管理员）。 -->
+  <div class="card" style="margin-top:14px">
+    <h2 style="display:flex;align-items:center;gap:10px">
+      <span>维护与诊断</span>
+      <span class="spacer" style="flex:1"></span>
+      <button onclick="runCheckup()" id="btnCheckup" class="primary">开始体检</button>
+    </h2>
+    <div class="btns" style="margin:0 0 10px">
+      <!-- 诊断一键导出（V4.14.10）：把健康快照 / 统计 / 日志尾部 / 活配置打成一个 zip（默认放桌面） -->
+      <button onclick="exportDiagnostics(this)" id="btnDiag">导出诊断包</button>
+      <button onclick="rescan()" id="btnScan">重新扫描</button>
+      <button onclick="testWrite()" id="btnW">测试写入</button>
+      <button onclick="testCycle()" id="btnCycle">测试完整缓存</button>
+      <button onclick="probeExtension()">重新检测接管</button>
+      <a class="btn" href="/test" target="_blank">打开自检页</a>
+      <a class="btn" href="/health" target="_blank">原始数据</a>
+    </div>
+    <div id="checkupRows" style="font-size:12.5px;color:var(--fg2)"></div>
+    <div class="muted" id="checkupMsg" style="font-size:11.5px;margin-top:6px"></div>
+    <div class="muted" id="diagMsg" style="font-size:11.5px;margin-top:6px;word-break:break-all"></div>
+    <div id="testOut" style="display:none;margin-top:10px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:8px;font:12px/1.7 Consolas,monospace;max-height:260px;overflow:auto"></div>
+  </div>
+
+  <div class="muted" style="text-align:center;padding:6px 0 2px;line-height:1.8">
+    服务与本窗口都可最小化；<b>关闭窗口不影响缓存功能</b>（程序在托盘后台继续）。完全退出请用托盘菜单的「退出」。<br>
+    碧蓝幻想本地缓存程序 · 仅为复用你本机已有的缓存文件
+  </div>
+
+</main>
+
+<script>
+'use strict';
+
+var $ = function (id) { return document.getElementById(id); };
+
+// V4.12.0：给各渲染块做"签名没变就一行 DOM 都不碰"的闸。SSE 的 stats 推送最密 250ms 一次，
+// 过去绝大多数帧都在原样重绘大半个页面（横幅、缓存概况、清理面板全是 innerHTML 重建）——
+// 控制台窗口明明挂着没动，CPU 却一直在烧。这是把 renderSources 早已在用的签名比对法
+// 推广到全部渲染块。
+var _renderSigs = {};
+function sigChanged(key, sig) {
+  if (_renderSigs[key] === sig) return false;
+  _renderSigs[key] = sig;
+  return true;
+}
+var logBox = $('log');
+var follow = true;
+var seenIds = new Set();
+var connected = false;
+var everWorked = false;
+// 服务是否已经没了（用来决定要不要把本窗口关掉）。
+//   goneHandled  防止重复处理
+//   pollFails    连续轮询失败次数：偶发抖动不该关窗口，连续失败才认定服务已退出
+//   serverSaidShutdown  服务端在 /api/shutdown 里主动广播的"我要关了"，最可信
+var goneHandled = false;
+var pollFails = 0;
+var serverSaidShutdown = false;
+var extOk = null;          // null=未知, true=代理在接管, false=未接管
+// 接管方式：system=占用系统代理（任何浏览器都走缓存）；off=关闭（槽位留给加速器/VPN）。
+var proxyMode = 'system';
+var sysInstalled = false;   // 系统槽位当前是否由本程序接管（注册表事实，/api/stats 下发）
+var proxyLastRequestAt = 0;
+
+function takeoverState() {
+  if (proxyMode === 'off') return 'off';
+  // system 模式的判定以「注册表已接管」这个事实为准；探针图片是在本控制台窗口里跑的，
+  // 该窗口自己的代理配置若不正常会误报失败（实测：探针直连源站 404，而缓存明明在工作），
+  // 所以探针失败只降级为「okprobe」（接管正常但探针未通过），绝不显示「未接管」。
+  if (!sysInstalled) return 'off';
+  if (extOk === true) return 'ok';
+  if (extOk === false) return 'okprobe';
+  return 'unknown';
+}
+
+/* ---------------- 根证书位置提示（V4.3.5 新增） ----------------
+   本程序要在本地解密 HTTPS，随包的 ca.crt 必须装进「受信任的根证书颁发机构」。
+   而「中间证书颁发机构」的存储名恰好叫 CA：`certutil -addstore CA`、PowerShell 的
+   `Cert:\CurrentUser\CA` 指的都是它 —— 装错之后浏览器会静默拒绝一切，资源全部加载失败、
+   缓存几乎不增长，看起来完全像网络问题。这里把服务端查到的位置直接摆到界面上。 */
+var certWarnEl = null;
+function certWarnTitle(st) {
+  if (st === 'misplaced') return '根证书装错了位置';
+  if (st === 'stale') return '根证书是旧的那一张';
+  if (st === 'missing') return '根证书没装上';
+  return '根证书状态异常';
+}
+function renderCertWarn(cert) {
+  var bad = cert && cert.state && cert.state !== 'ok' && cert.state !== 'unknown';
+  // V4.12.0：签名没变就不动 DOM（横幅位置固定，反复 innerHTML 会引起整条横幅重排）
+  if (!sigChanged('certwarn', bad ? (String(cert.state) + '|' + (cert.advice || '') + '|' + (cert.fix || []).join(',')) : 'ok')) return;
+  if (!bad) {
+    if (certWarnEl && certWarnEl.parentNode) certWarnEl.parentNode.removeChild(certWarnEl);
+    certWarnEl = null;
+    return;
+  }
+  if (!certWarnEl) {
+    certWarnEl = document.createElement('div');
+    certWarnEl.className = 'hint err';
+    var b = $('banner');
+    if (b && b.parentNode) b.parentNode.insertBefore(certWarnEl, b);
+  }
+  var fix = '';
+  if (cert.fix && cert.fix.length) {
+    fix = '<br>修复命令：<code>' + cert.fix.map(escapeHtml).join('</code> 然后 <code>') + '</code>' +
+      '　装完必须<b>完全退出浏览器</b>再打开（证书信任在启动时加载，只刷新页面不算）';
+  }
+  certWarnEl.innerHTML = '<b>' + certWarnTitle(cert.state) + '</b> —— ' + escapeHtml(cert.advice || '') + fix +
+    ' <button onclick="recheckCert()">重新检查</button>';
+}
+function recheckCert() {
+  fetch('/api/cert-check', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { if (d && d.cert) renderCertWarn(d.cert); })
+    .catch(function () { });
+}
+
+function fmtClock(ts) {
+  if (!ts) return '';
+  var d = new Date(ts);
+  return ' · ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2);
+}
+
+function fmtBytes(n) {
+  if (!n && n !== 0) return '—';
+  var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(i >= 3 ? 2 : (i === 0 ? 0 : 1)) + ' ' + u[i];
+}
+function fmtNum(n) { return (n || 0).toLocaleString('en-US'); }
+function fmtDur(sec) {
+  sec = sec || 0;
+  var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return (h ? h + ' 小时 ' : '') + (h || m ? m + ' 分 ' : '') + s + ' 秒';
+}
+
+/* ---------------- 日志渲染 ---------------- */
+
+function addLog(e) {
+  if (e.id && seenIds.has(e.id)) return;
+  if (e.id) { seenIds.add(e.id); if (seenIds.size > 900) seenIds = new Set(); }
+
+  var div = document.createElement('div');
+  div.className = 'lg ' + e.tag;
+  var size = e.size != null ? fmtBytes(e.size) : (e.detail ? e.detail : '');
+  div.innerHTML =
+    '<span class="t">' + (e.t || '') + '</span>' +
+    '<span class="tag ' + e.tag + '">' + e.tag + '</span>' +
+    '<span class="p" title="' + escapeAttr(e.path || '') + '">' + escapeHtml(e.path || '') + '</span>' +
+    '<span class="s">' + escapeHtml(String(size)) + '</span>';
+  logBox.appendChild(div);
+
+  while (logBox.childElementCount > 400) logBox.removeChild(logBox.firstChild);
+  if (follow) logBox.scrollTop = logBox.scrollHeight;
+}
+function escapeHtml(s) { return s.replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+function escapeAttr(s) { return escapeHtml(s); }
+function clearLogView() { logBox.innerHTML = ''; seenIds = new Set(); }
+
+function toggleFollow(btn) {
+  follow = !follow;
+  btn.textContent = follow ? '暂停滚动' : '继续滚动';
+  btn.className = follow ? 'primary' : '';
+  $('logHint').textContent = follow ? '自动滚动' : '已暂停';
+  if (follow) logBox.scrollTop = logBox.scrollHeight;
+}
+
+/* ---------------- 数据渲染 ---------------- */
+
+function renderStats(d) {
+  lastData = d;
+  var s = d.stats || {};
+  // 同步接管方式与「最近有没有请求经过代理」
+  if (d.systemProxy && d.systemProxy.mode) proxyMode = d.systemProxy.mode;
+  if (d.systemProxy) sysInstalled = !!d.systemProxy.installed;
+  if (d.proxy) {
+    proxyLastRequestAt = d.proxy.lastRequestAt || 0;
+  }
+  // 根证书位置：装错存储（例如装进「中间证书颁发机构」）浏览器一律不认 ——
+  // 症状是资源全部加载失败、缓存几乎不增长，而界面此前毫无提示（真实案例排查了很久）。
+  renderCertWarn(d.cert);
+  // 同步版本号（头部徽章；副标题由 updateServerLine 统一渲染）
+  if (d.appVersion) {
+    var vb = $('verBadge');
+    if (vb && vb.textContent !== d.appVersion) vb.textContent = d.appVersion;
+  }
+  // 启动游戏只有「系统默认浏览器」一种方式（V4.3.6 起），不再有启动目标需要同步。
+  // 同步开机自启开关（游戏 / 加速器）
+  if (d.autoLaunch) {
+    var dirty = false;
+    if (typeof d.autoLaunch.enabled === 'boolean' && d.autoLaunch.enabled !== autoGame) { autoGame = d.autoLaunch.enabled; dirty = true; }
+    if (typeof d.autoLaunch.accel === 'boolean' && d.autoLaunch.accel !== autoAccel) { autoAccel = d.autoLaunch.accel; dirty = true; }
+    if (dirty) renderAutoLaunch();
+  }
+  // 同步悬浮监控窗：开关值 + 此刻该不该显示（服务端算的，可能被托盘手动改过）
+  if (d.floatWin && applyFloatState(d.floatWin)) renderFloat();
+  // 同步加速器 exe 路径
+  if (d.accelerator && d.accelerator.path && d.accelerator.path !== accelPath) {
+    accelPath = d.accelerator.path;
+    renderAccelPath();
+  }
+  // 同步「启动游戏」用的程序路径。注意空串也要同步 —— 空是有效状态（= 用系统默认浏览器），
+  // 与加速器那条不同（加速器没有默认目标，空值无需渲染）。
+  if (d.game && typeof d.game.path === 'string' && d.game.path !== gamePath) {
+    gamePath = d.game.path;
+    renderGamePath();
+  }
+  $('mHit').textContent = fmtNum(s.hit);
+  $('mMiss').textContent = fmtNum(s.miss);
+  $('mStore').textContent = fmtNum(s.stored);
+  $('mDyn').textContent = fmtNum(s.dynamic);
+  $('mErr').textContent = fmtNum(s.error);
+
+  $('cardDyn').className = 'metric dyn' + (s.dynamic > 0 ? ' alert' : '');
+  $('cardErr').className = 'metric err' + (s.error > 0 ? ' danger' : '');
+
+  if ((s.hit || 0) + (s.miss || 0) > 0) everWorked = true;
+
+  // 状态条（V4.12.0：先算出 class 与 HTML，签名没变就不写 DOM —— 游戏期间这条横幅
+  // 曾因内容里带着逐次递增的命中数而每 250ms 重绘一次；计数本来就显示在上方指标卡里，
+  // 横幅只描述状态，不再重复数字。）
+  var banner = $('banner');
+  var reqs = (s.hit || 0) + (s.miss || 0);
+  var tk = takeoverState();
+  var bClass = 'hint', bHtml = '';
+  if (tk === 'off' && proxyMode === 'off') {
+    bHtml = '<b>缓存接管已关闭</b> —— 配置里 <code>pacMode</code> 为 <code>off</code>，没有任何窗口走缓存。';
+  } else if (tk === 'off' && d.systemProxy && d.systemProxy.foreign && d.systemProxy.foreign.url) {
+    // 槽位被别的程序占着，而且我们没能从它那份 PAC 里提取出可串接的本机代理 —— 于是主动让位。
+    // 这种情况必须说清「谁占着 / 为什么不让 / 接下来怎么办」：旧文案让人去"检查自动配置脚本
+    // 是否指向本程序"，而事实是它指向别人、且是我们**主动不动它**，那句话只会把人带偏。
+    var fp = d.systemProxy.foreign;
+    bClass = 'hint warn';
+    bHtml = '<b>缓存没生效：系统「自动配置脚本」被别的程序占用了</b><br>' +
+      '占用者：<code>' + escapeHtml(fp.url) + '</code><br>' +
+      '本程序为免与加速器互抢，<b>没有去动它</b>；而这份 PAC 里没有可串接的本机代理，' +
+      '所以游戏请求不经过本机代理、缓存不会生效。<br>' +
+      '<span class="muted">没有接管它的原因：' + escapeHtml(fp.reason || '未知') + '</span><br>' +
+      '<b>可选做法（任选一条即可）</b>：① <b>把加速器改成「静态代理 / 全局代理」模式</b> —— ' +
+      '本程序能自动识别并串接它，缓存与加速并用（<b>首选</b>）；② 在占用它的程序里关掉「系统代理 / PAC」，' +
+      '然后重启本程序；③ 若它不依赖 PAC（TUN 网卡 / 路由模式），可加载随包的 ' +
+      '<code>edge-extension</code>（浏览器层优先级高于系统设置）；④ 确认不再需要它时，再手动清空该槽位。';
+  } else if (tk === 'off') {
+    bClass = 'hint err';
+    bHtml = '<b>未接管缓存</b> —— 游戏请求没有经过本机代理，浏览器正直接连源站。' +
+      '请先确认程序正在运行，然后重启浏览器；若仍不行，检查系统「自动配置脚本」是否指向 http://127.0.0.1:8799/proxy.pac' +
+      '，' +
+      '改好后点右侧「重新检测」。';
+  } else if (tk === 'okprobe' && reqs === 0) {
+    bHtml = '<b>接管正常（探针未通过）</b> —— 系统「自动配置脚本」已指向本程序，但本控制台窗口自己的探针图片没有走通' +
+      '（这个窗口的代理配置可能不经过本机代理）。<b>判断真实状态请看下方「命中/回源」数字</b>：游戏在玩、数字在涨就是正常的。';
+  } else if (!connected) {
+    bClass = 'hint err';
+    bHtml = '<b>与服务断开</b> —— 程序可能已退出，或正在重启中。若已退出，从右下角托盘图标重新启动即可。';
+  } else if (s.dynamic > 0) {
+    bClass = 'hint warn';
+    bHtml = '<b>检测到 ' + s.dynamic + ' 次异常拦截</b> —— 把动态接口也拦下来了，请把下方 WARN 日志反馈给开发者。';
+  } else if (s.error > 0) {
+    bClass = 'hint warn';
+    bHtml = '<b>有 ' + s.error + ' 次错误</b> —— 多为源站偶发连接失败，可展开右下「最近错误」查看。';
+  } else if (reqs > 0) {
+    bClass = 'hint ok';
+    bHtml = '<b>工作正常</b> —— 正在拦截并复用本地缓存（实时数字见上方指标卡）。';
+  } else if (tk === 'ok') {
+    bClass = 'hint ok';
+    bHtml = '<b>缓存接管正常</b> —— 当前没有请求是<b>正常现象</b>：' +
+      '游戏资源已经全部命中<b>浏览器自身的缓存</b>，不需要再发起网络请求，这是最理想的状态。<br>' +
+      '<span class="muted">本次运行统计为 0 只是因为服务刚启动；换个地图、打开新关卡，或点「运行自检」就会看到请求。</span>';
+  } else {
+    bHtml = '正在检测缓存接管状态…';
+  }
+  if (sigChanged('banner', bClass + '|' + bHtml)) {
+    banner.className = bClass;
+    banner.innerHTML = bHtml;
+  }
+
+  // 右侧
+  updateServerLine(d);
+  if (d.cache) renderCache(d.cache);
+  renderSources(d);
+  renderEvict(d);
+  renderChain(d);
+  if (d.systemProxy) renderSystemProxy(d.systemProxy, d.upstreamProbe);
+  renderExtBadge();          // 徽章也跟着轮询刷新，免得和上方横幅说法不一致
+  renderErrors(d.recentErrors || []);
+}
+
+// 系统代理（PAC）状态：与加速器共存的可见性入口。
+// 「其余流量去向」显示的是探测到的加速器代理；为空说明没探测到，
+// 非 GBF 流量会直连 —— 此时若开着加速器仍无加速，说明它用的不是静态代理。
+function renderSystemProxy(p, probe) {
+  // V4.12.0：签名没变就不重绘（这几行的值平时几乎不变）；V4.14.9 加入 bypass
+  var sig = [p.mode, p.installed, p.autoConfig, p.upstream, p.upstreamFrom, p.bypass,
+    probe && probe.active, probe && probe.proxy, probe && probe.from].join('|');
+  if (!sigChanged('sysproxy', sig)) return;
+
+  var st = $('pacState');
+  var up = $('pacUpstream');
+  var ch = $('pacChain');
+  var bb = $('btnBypass');
+
+  // 接管方式：system=占用系统槽位；off=不占用（槽位留给加速器/VPN）
+  var mode = p.mode || 'system';
+  if (mode !== 'system') {
+    st.innerHTML = '<span class="bad">已关闭</span>';
+    up.innerHTML = '<span class="dim">—</span>';
+    if (ch) {
+      ch.innerHTML = probe && probe.active
+        ? '<span class="ok">是</span> <b>' + probe.proxy + '</b>'
+        : '<span class="dim">否（直连回源）</span>';
+    }
+    if (bb) bb.style.display = 'none';   // 接管本来就是关的，没有"暂停"可言
+    return;
+  }
+
+  // 缓存功能开关（V4.15.2 起是设置面板里的滑块）：开 = 缓存工作中，关 = 临时直连暂停
+  if (bb) {
+    bb.style.display = '';
+    setSwitch('btnBypass', !p.bypass);
+  }
+
+  if (p.bypass) {
+    st.innerHTML = '<span class="wait">临时直连中（缓存已暂停）</span>';
+  } else if (p.installed) {
+    st.innerHTML = '<span class="ok">已接管</span>';
+  } else if (p.autoConfig) {
+    st.innerHTML = '<span class="wait">槽位被占用，已让位</span>';
+  } else {
+    st.innerHTML = '<span class="bad">未接管</span>';
+  }
+
+  if (p.upstream) {
+    up.innerHTML = '加速器 <b>' + p.upstream + '</b>' +
+      '<span class="dim">（' + (p.upstreamFrom === 'config' ? 'config.json 指定' : '系统代理设置') + '）</span>';
+  } else if (!p.installed && p.autoConfig) {
+    up.innerHTML = '<span class="dim">' + escapeHtml(p.autoConfig) + '</span>';
+  } else {
+    up.innerHTML = '<span class="dim">直连（未探测到加速器代理）</span>';
+  }
+
+  if (ch) {
+    ch.innerHTML = probe && probe.active
+      ? '<span class="ok">是</span> <b>' + probe.proxy + '</b><span class="dim">（' + probe.from + '）</span>'
+      : '<span class="dim">否（直连回源）</span>';
+  }
+}
+
+// 诊断一键导出（V4.14.10）：服务端把现场打成一个 zip（默认放桌面），求助时发这一个文件即可
+function exportDiagnostics(btn) {
+  btn.disabled = true;
+  $('diagMsg').textContent = '正在打包…';
+  fetch('/api/export-diagnostics', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      btn.disabled = false;
+      $('diagMsg').textContent = d.ok
+        ? '已导出：' + d.zip + '（' + d.files.length + ' 个文件）—— 求助时把这个文件发出去即可'
+        : '导出失败：' + (d.error || '未知错误');
+    })
+    .catch(function (e) { btn.disabled = false; $('diagMsg').textContent = '导出失败：' + e.message; });
+}
+
+// 临时直连开关（V4.15.2 起是设置面板的滑块）：滑块开 = 缓存工作中；点一下 → 暂停
+function togglePacBypass(btn) {
+  var caching = btn.getAttribute('aria-checked') === 'true';
+  var on = caching ? '1' : '0';   // on = 临时直连开（暂停缓存）
+  btn.disabled = true;
+  fetch('/api/pac-bypass?on=' + on, { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      btn.disabled = false;
+      refreshSettings();
+      var tip = $('pacProbeTip');
+      if (tip && d.bypass) tip.textContent = '缓存已暂停：浏览器流量已回到加速器/直连。部分浏览器可能要重开页面才感知代理变化。';
+    })
+    .catch(function () { btn.disabled = false; });
+}
+
+// 启动游戏：默认用系统默认浏览器打开（系统 PAC 已分流）。V4.5.0 起可指定程序：
+// 配了 gameLaunchPath 就启动那个 exe 并把游戏 URL 当参数传给它（用途：指定某个浏览器，
+// 或任何自己写的启动包装程序）；没配就还是默认浏览器。⚙ 齿轮展开路径编辑（浏览/保存/清空）。
+
+// 「启动加速器」：按下直接拉起配置的 exe；⚙ 齿轮展开路径编辑（浏览/保存）。
+var accelPath = '';
+
+function renderAccelPath() {
+  var i = $('accelPathInput');
+  var row = document.getElementById('accelEditRow');
+  if (i && row && row.style.display !== 'none') i.value = accelPath;
+  var b = $('btnAccel');
+  if (b) b.title = accelPath ? ('启动：' + accelPath) : '启动加速器';
+}
+
+function toggleAccelEdit(show) {
+  var row = document.getElementById('accelEditRow');
+  var on = (typeof show === 'boolean') ? show : (row.style.display === 'none');
+  row.style.display = on ? '' : 'none';
+  if (on) { $('accelPathInput').value = accelPath; }
+}
+
+function browseAccelFile() {
+  var b = $('btnAccelBrowse');
+  b.disabled = true;
+  fetch('/api/browse-file').then(function (r) { return r.json(); }).then(function (d) {
+    b.disabled = false;
+    if (d.path) { $('accelPathInput').value = d.path; }
+  }).catch(function () { b.disabled = false; });
+}
+
+function saveAccelPath() {
+  var v = $('accelPathInput').value.trim();
+  if (!v) { $('launchGameHint').textContent = '路径为空'; return; }
+  fetch('/api/set-accelerator-path?path=' + encodeURIComponent(v), { method: 'POST' })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) { accelPath = d.path; renderAccelPath(); toggleAccelEdit(false); }
+      else { $('launchGameHint').textContent = '保存失败：' + (d.error || '未知错误'); }
+    }).catch(function (e) { $('launchGameHint').textContent = '保存失败：' + e.message; });
+}
+
+// 「启动游戏」用哪个程序打开：空 = 系统默认浏览器（默认）；非空 = 那个 exe，游戏 URL 当参数传给 it。
+var gamePath = '';
+
+function renderGamePath() {
+  var i = $('gamePathInput');
+  var row = document.getElementById('gameEditRow');
+  if (i && row && row.style.display !== 'none') i.value = gamePath;
+  var g = $('btnGameGear');
+  if (g) g.title = gamePath
+    ? ('当前用这个程序打开游戏：' + gamePath + '（点此修改或清空）')
+    : '自定义用来打开游戏的程序（默认：系统默认浏览器）';
+}
+
+function toggleGameEdit(show) {
+  var row = document.getElementById('gameEditRow');
+  var on = (typeof show === 'boolean') ? show : (row.style.display === 'none');
+  row.style.display = on ? '' : 'none';
+  if (on) { $('gamePathInput').value = gamePath; }
+}
+
+function browseGameFile() {
+  var b = $('btnGameBrowse');
+  b.disabled = true;
+  fetch('/api/browse-file?for=game').then(function (r) { return r.json(); }).then(function (d) {
+    b.disabled = false;
+    if (d.path) { $('gamePathInput').value = d.path; }
+  }).catch(function () { b.disabled = false; });
+}
+
+function saveGamePath() {
+  var v = $('gamePathInput').value.trim();
+  // 空值不必用「保存」——界面提供「清空」按钮，这里提示一下更明确
+  if (!v) { $('launchGameHint').textContent = '路径为空：想回到默认浏览器请点「清空」'; return; }
+  fetch('/api/set-game-launch-path?path=' + encodeURIComponent(v), { method: 'POST' })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) {
+        gamePath = d.path; renderGamePath(); toggleGameEdit(false);
+        $('launchGameHint').textContent = '已保存：以后「启动游戏」用这个程序打开';
+        setTimeout(function () { $('launchGameHint').textContent = ''; }, 6000);
+      } else { $('launchGameHint').textContent = '保存失败：' + (d.error || '未知错误'); }
+    }).catch(function (e) { $('launchGameHint').textContent = '保存失败：' + e.message; });
+}
+
+function clearGamePath() {
+  fetch('/api/set-game-launch-path?path=', { method: 'POST' })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) {
+        gamePath = ''; renderGamePath(); toggleGameEdit(false);
+        $('launchGameHint').textContent = '已清空：改回用系统默认浏览器打开游戏';
+        setTimeout(function () { $('launchGameHint').textContent = ''; }, 6000);
+      } else { $('launchGameHint').textContent = '清空失败：' + (d.error || '未知错误'); }
+    }).catch(function (e) { $('launchGameHint').textContent = '清空失败：' + e.message; });
+}
+
+function launchAccelerator(btn) {
+  btn.disabled = true;
+  fetch('/api/launch-accelerator', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+    btn.disabled = false;
+    if (d.ok) {
+      accelPath = d.path;
+      $('launchGameHint').textContent = d.pending ? '已交给系统，可能在等 UAC 确认…' : '启动成功';
+      setTimeout(function () { $('launchGameHint').textContent = ''; }, 6000);
+    } else if (d.code === 'NO_PATH') {
+      $('launchGameHint').textContent = d.error;
+      toggleAccelEdit(true);
+    } else {
+      $('launchGameHint').textContent = '启动失败：' + (d.error || '未知错误');
+    }
+  }).catch(function (e) {
+    btn.disabled = false;
+    $('launchGameHint').textContent = '启动失败：' + e.message;
+  });
+}
+
+// 开机自启开关：game=自动启动游戏，accel=自动启动加速器
+var autoGame = true, autoAccel = true;
+
+function renderAutoLaunch() {
+  setSwitch('swAutoGame', autoGame);
+  setSwitch('swAutoAccel', autoAccel);
+}
+
+function toggleAutoLaunch(kind) {
+  var q;
+  if (kind === 'game') { q = 'enabled=' + (autoGame ? '0' : '1'); }
+  else { q = 'accel=' + (autoAccel ? '0' : '1'); }
+  fetch('/api/set-auto-launch?' + q, { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.ok && d.autoLaunch) {
+      autoGame = !!d.autoLaunch.enabled;
+      autoAccel = !!d.autoLaunch.accel;
+    }
+    renderAutoLaunch();
+  }).catch(function () { renderAutoLaunch(); });
+}
+
+// 悬浮监控窗（V4.13.2）
+//   floatOn   = 关掉控制台窗口后要不要自动弹（config.json 的 floatOnConsoleClose）
+//   floatShow = 此刻该不该显示（服务端算的，含"托盘菜单手动钦定"那一路）
+// 两者都由服务端下发，这里只负责画按钮 —— 判定逻辑不在这边重写一份，
+// 免得控制台、托盘、服务三处各有一套"什么时候该显示"的说法。
+var floatOn = true, floatShow = false;
+
+function renderFloat() {
+  setSwitch('tglFloat', floatOn);
+  var n = $('btnFloatNow');
+  if (n) { n.textContent = floatShow ? '收起悬浮窗' : '立即显示'; }
+}
+
+function applyFloatState(fw) {
+  if (!fw) return false;
+  var dirty = false;
+  if (typeof fw.enabled === 'boolean' && fw.enabled !== floatOn) { floatOn = fw.enabled; dirty = true; }
+  if (typeof fw.show === 'boolean' && fw.show !== floatShow) { floatShow = fw.show; dirty = true; }
+  return dirty;
+}
+
+function toggleFloat() {
+  fetch('/api/set-float-on-close?enabled=' + (floatOn ? '0' : '1'), { method: 'POST' })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) applyFloatState(d.floatWin);
+      renderFloat();
+    }).catch(function () { renderFloat(); });
+}
+
+function toggleFloatNow() {
+  fetch('/api/float-toggle', { method: 'POST' })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) applyFloatState(d.floatWin);
+      renderFloat();
+    }).catch(function () { renderFloat(); });
+}
+
+function launchGame(btn) {
+  var hint = $('launchGameHint');  btn.disabled = true;
+  var old = btn.textContent;
+  btn.textContent = '启动中…';
+  hint.textContent = '';
+  fetch('/api/launch-game', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+    btn.disabled = false;
+    btn.textContent = old;
+    if (d.ok) {
+      if (d.target === 'custom') {
+        hint.textContent = d.pending
+          ? '已交给系统，可能在等 UAC 确认…'
+          : ('已启动：用 ' + (d.program || '指定程序') + ' 打开游戏（缓存靠系统 PAC 分流生效）');
+      } else {
+        hint.textContent = '已启动：游戏会在你的默认浏览器里打开（系统 PAC 分流：资源走缓存、接口直连）。';
+      }
+      setTimeout(function () { hint.textContent = ''; }, 8000);
+    } else if (d.code === 'BAD_PATH') {
+      // 指定的程序不在了：直接展开 ⚙ 让用户重选或清空，别只丢一句错
+      hint.textContent = d.error;
+      toggleGameEdit(true);
+    } else {
+      hint.textContent = '启动失败：' + (d.error || '未知错误');
+    }
+  }).catch(function (e) {
+    btn.disabled = false;
+    btn.textContent = old;
+    hint.textContent = '启动失败：' + e.message;
+  });
+}
+
+function probeUpstream() {
+  var b = $('btnProbeUp');
+  b.disabled = true;
+  b.textContent = '探测中…';
+  $('pacProbeTip').textContent = '正在扫描本机监听端口，并逐个试 CONNECT…';
+  fetch('/api/probe-upstream').then(function (r) { return r.json(); }).then(function (d) {
+    b.disabled = false;
+    b.textContent = '探测加速器代理';
+    if (d.active) {
+      $('pacChain').innerHTML = '<span class="ok">是</span> <b>' + d.proxy + '</b><span class="dim">（' + d.from + '）</span>';
+    }
+    var l = d.lastProbe || {};
+    var cs = l.candidates || [];
+    var parts = [];
+    if (cs.length) {
+      parts.push('端口探测：' + cs.map(function (c) {
+        return c.port + (c.proc ? '(' + c.proc + ')' : '') + (c.ok ? ' <span class="ok">可用</span>' : ' ✗' + (c.error || ''));
+      }).join('、'));
+    } else {
+      parts.push('端口探测：本机所有监听端口都试过了，没有可用作代理的（加速器多半不提供本地代理）。');
+    }
+    if (l.tunnel && ((l.tunnel.adapters && l.tunnel.adapters.length) || l.tunnel.gamePath)) {
+      var tt = '隧道网卡：' + ((l.tunnel.adapters || []).map(function (a) {
+        return a.name + (a.desc ? '（' + a.desc + '）' : '');
+      }).join('、') || '无');
+      if (l.tunnel.gamePath) tt += '；' + l.tunnel.gamePath + ' —— 路由模式按 IP 判定，我们的回源也走它';
+      parts.push(tt);
+    }
+    if (l.notAdopted) {
+      parts.push('注意：本机 ' + l.notAdopted.port + '（' + (l.notAdopted.proc || '未知进程') +
+        '）确实能当代理用，但它不像加速器，<b>没有自动启用</b>。若确认是加速器的代理，' +
+        '把它填进 config.json 的 upstreamProxy。');
+    }
+    $('pacProbeTip').innerHTML = parts.join('<br>');
+  }).catch(function (e) {
+    b.disabled = false;
+    b.textContent = '探测加速器代理';
+    $('pacProbeTip').textContent = '探测失败：' + e.message;
+  });
+}
+
+var serverInfo = null;
+function updateServerLine(d) {
+  if (d.server) serverInfo = d.server;
+  if (d.extensionHint) serverInfo = Object.assign({}, serverInfo, d.extensionHint);
+  var s = $('subline');
+  if (serverInfo) {
+    // V4.12.0：已运行时长每秒才变一次 —— 签名把重绘从每 250ms 一次降到最多 1s 一次
+    var html = (d.appVersion ? d.appVersion + ' · ' : '') + '端口 ' + serverInfo.port +
+      ' · Node ' + (serverInfo.version || '') +
+      ' · 已运行 ' + fmtDur(serverInfo.uptimeSec) + ' · <a href="/health" target="_blank">原始数据</a>';
+    if (sigChanged('subline', html)) s.innerHTML = html;
+  }
+}
+
+function renderCache(c) {
+  // V4.12.0：缓存统计只在扫描/清理/换目录时变化 —— 平时这一整块（含下面的清理面板、
+  // 构成分组、条形图）的 DOM 重建全部跳过
+  var sig = [c.root, c.rootExists, c.writable, c.freeBytes, c.isDefault, c.scanning, c.scanAt,
+    c.files, c.bytes, c.groupTruncated, JSON.stringify(c.byExt || {}),
+    JSON.stringify(c.byExtBytes || {}), JSON.stringify(c.byGroup || {})].join('|');
+  if (!sigChanged('cache', sig)) return;
+
+  $('cRoot').textContent = c.root || '—';
+
+  // 目录状态：可写性 + 可用空间 + 是否仍是默认目录
+  var st = [];
+  if (c.writable === true) st.push('<span class="ok">可写</span>');
+  else if (c.writable === false) st.push('<span class="bad">不可写</span>');
+  else st.push('<span class="wait">未检测</span>');
+  if (c.freeBytes) st.push('可用 ' + fmtBytes(c.freeBytes));
+  if (c.isDefault) st.push('<span class="dim">默认目录</span>');
+  else st.push('<span class="wait">自定义目录</span>');
+  $('cState').innerHTML = st.join(' · ');
+
+  // 目录不存在时明确报警。
+  // 这条很重要：默认目录是「程序目录内的 \cache\gbf」（V4.5.4 起；旧版曾是上一级，
+  // 已迁移）—— 换个位置运行程序就是另一个目录，表现是"进游戏又在下载一遍资源"，
+  // 而服务端那条警告只打到控制台（GUI 版 exe 根本没有控制台，等于看不见）。
+  var rootWarn = $('cRootWarn');
+  if (rootWarn) {
+    if (c.rootExists === false) {
+      rootWarn.style.display = '';
+      rootWarn.innerHTML = '<b>缓存目录不存在</b> —— 当前是 ' + escapeHtml(c.root || '') +
+        '。资源会被下载但<b>无法写入缓存</b>（下次还得重下）。点「更改目录」选一个可用位置，' +
+        '例如 <code>D:\\GBF缓存</code>。';
+    } else {
+      rootWarn.style.display = 'none';
+    }
+  }
+
+  // 目录几乎为空时给出解释 —— 这几乎总是「浏览器缓存抢在前面」而不是程序有问题
+  var tip = $('cEmptyTip');
+  if (c.scanAt && c.files !== undefined && c.files <= 10 && !c.isDefault) {
+    tip.style.display = '';
+  } else {
+    tip.style.display = 'none';
+  }
+  $('cScanAt').textContent = c.scanAt ? new Date(c.scanAt).toLocaleTimeString() : (c.scanning ? '扫描中…' : '未扫描');
+  $('cFiles').textContent = c.files ? fmtNum(c.files) + ' 个' : (c.scanning ? '扫描中…' : '—');
+  $('cSize').textContent = c.bytes ? fmtBytes(c.bytes) : (c.scanning ? '扫描中…' : '—');
+
+  renderCleanPanel(c);
+  renderGroups(c);
+
+  var bars = $('cBars');
+  if (!c.byExt || !Object.keys(c.byExt).length) { bars.innerHTML = ''; return; }
+  var arr = Object.keys(c.byExt).map(function (k) { return [k, c.byExt[k]]; })
+    .sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6);
+  var max = arr[0][1];
+  bars.innerHTML = arr.map(function (p, i) {
+    var pct = c.files ? (p[1] / c.files * 100) : 0;
+    return '<div class="bar"><div class="bl"><span>' + p[0] + '</span><span>' +
+      fmtNum(p[1]) + ' · ' + pct.toFixed(1) + '%</span></div>' +
+      '<div class="bt"><div class="bf' + (i % 2 ? ' alt' : '') + '" style="width:' +
+      Math.max(2, p[1] / max * 100) + '%"></div></div></div>';
+  }).join('');
+}
+
+/* ---------------- 缓存构成（按目录 / 版本戳） ----------------
+ *
+ * 版本戳目录（assets/<纯数字>，英语模式在 assets_en/<纯数字>）是"只涨不删"的来源：
+ * 游戏每次更新资源版本就换一个新戳，旧戳的 URL 不会再被请求，文件却一直躺在磁盘上。这里把它单独标出来，
+ * 好让"有多少是可回收的冗余"一眼可见 —— 决定"保留几个戳"要有依据，不能凭感觉。
+ */
+function renderGroups(c) {
+  var box = $('groupRows'), tip = $('groupTip');
+  if (!box) return;
+  var g = (c && c.byGroup) || {};
+  var keys = Object.keys(g);
+  if (!keys.length) {
+    box.innerHTML = '<span class="muted">' + (c && c.scanning ? '扫描中…' : '暂无数据（等一次扫描完成）') + '</span>';
+    if (tip) tip.textContent = '';
+    return;
+  }
+
+  var arr = keys.map(function (k) {
+    return { group: k, files: g[k].files || 0, bytes: g[k].bytes || 0, isStamp: !!g[k].isStamp };
+  }).sort(function (a, b) { return b.bytes - a.bytes; });
+
+  // 分组是互斥且穷尽的（每个非 .ext 文件恰好落在一组里），所以各组之和 = 总字节数
+  var total = c.bytes || arr.reduce(function (s, x) { return s + x.bytes; }, 0);
+
+  box.innerHTML = arr.slice(0, 8).map(function (x) {
+    var pct = total ? (x.bytes / total * 100) : 0;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid #1c2230">' +
+      '<span style="flex:1;font-family:Consolas,monospace;color:var(--fg2);word-break:break-all">' +
+        escapeHtml(x.group) +
+        (x.isStamp ? ' <span style="color:var(--stamp);border:1px solid var(--stamp);' +
+          'border-radius:5px;padding:0 5px;font-size:10.5px">版本戳</span>' : '') +
+      '</span>' +
+      '<span class="muted" style="white-space:nowrap">' + fmtNum(x.files) + ' 个 · ' +
+        fmtBytes(x.bytes) + ' · ' + pct.toFixed(1) + '%</span>' +
+      '</div>';
+  }).join('');
+
+  if (tip) {
+    var stamps = arr.filter(function (x) { return x.isStamp; });
+    var s = '共 ' + arr.length + ' 组' + (arr.length > 8 ? '（只列体积最大的 8 组）' : '') + '。';
+    if (stamps.length) {
+      var sum = stamps.reduce(function (a, x) { return a + x.bytes; }, 0);
+      s += '其中 ' + stamps.length + ' 个是版本戳目录，合计 ' + fmtBytes(sum) +
+        '；戳一变旧目录就不会再被请求，属可回收冗余（体积最大的是 ' + stamps[0].group +
+        '，' + fmtBytes(stamps[0].bytes) + '）。';
+    } else {
+      s += '尚未见到版本戳目录（形如 assets/<数字>）。';
+    }
+    if (c.groupTruncated) s += ' 分组数超过上限，其余已并入「其他」。';
+    tip.textContent = s;
+  }
+}
+
+/* ---------------- 命中来源分布 + X-VERSION 观测 ----------------
+ *
+ * ⚠️ 读这些数字时必须带上这条：被 Edge 自身磁盘缓存命中的请求**根本不会到达本代理**，
+ * 所以命中率只覆盖"到了代理的请求"。命中率高 且 资源请求总量低 = 浏览器缓存在前面
+ * 挡了大部分，属正常现象，不是"代理没起作用"。
+ */
+var lastSrcSig = '';
+
+function renderSources(d) {
+  var sc = (d && d.sources) || null;
+  var xv = (d && d.xVersion) || null;
+  var ol = (d && d.originLatency) || null;
+
+  // 实时推送是 250ms 一次，绝大多数帧的内容没变 —— 签名没变就直接跳过重排
+  var sig = (sc ? [sc.hit, sc.upstream, sc.total, sc.hitRate].join('/') : '-') + '|' +
+    (xv ? [xv.seen, xv.onAsset, xv.onOther, xv.assetRequests, xv.last, xv.lastPath].join('/') : '-') + '|' +
+    (ol ? [ol.count, ol.p50, ol.p95, ol.p99].join('/') : '-');
+  if (sig === lastSrcSig) return;
+  lastSrcSig = sig;
+
+  if ($('srcHit')) $('srcHit').textContent = sc ? fmtNum(sc.hit || 0) + ' 次' : '—';
+  if ($('srcUp')) $('srcUp').textContent = sc ? fmtNum(sc.upstream || 0) + ' 次' : '—';
+  if ($('srcRate')) {
+    if (!sc || sc.hitRate === null || sc.hitRate === undefined) {
+      $('srcRate').innerHTML = '<span class="muted">还没有资源请求经过代理</span>';
+    } else {
+      $('srcRate').innerHTML = '<b>' + sc.hitRate + '%</b> <span class="muted">（共 ' +
+        fmtNum(sc.total || 0) + ' 次到达代理）</span>';
+    }
+  }
+  if ($('srcTip')) {
+    $('srcTip').textContent = '只统计到达本代理的请求。被浏览器自身缓存挡下的请求不会到这里，' +
+      '真实节省高于此表；命中率高但请求很少，通常是浏览器缓存在前面挡着，属正常。';
+  }
+
+  // 回源耗时分布（V4.11.0）：只统计「未命中后真正出网回源」的请求（命中与后台预热不计入）。
+  // count=0 显示"还没有回源"而不是 0ms —— 还没测过和测到很快是两回事。
+  if ($('originLatency')) {
+    if (!ol || !ol.count) {
+      $('originLatency').innerHTML = '<span class="muted">还没有回源</span>';
+    } else {
+      $('originLatency').innerHTML = '<b>' + ol.p50 + '</b> / <b>' + ol.p95 + '</b> / <b>' + ol.p99 +
+        '</b> <span class="muted">ms（' + fmtNum(ol.count) + ' 次出网）</span>';
+    }
+  }
+
+  // 更新日卡片（P1-A，V4.18.0）：档位 + 迁移/跟随实况 + 最近一份战报。
+  // 数据来源：/api/stats（SSE stats 与首屏拉取同一份形状）。
+  if ($('udMode')) {
+    var modes = d.modes || {};
+    $('udMode').innerHTML = modes.prewarmEnabled
+      ? '<b>积极</b> <span class="muted">（全库预热）</span>'
+      : (modes.followEnabled
+        ? '<b>平衡</b> <span class="muted">（跟随式小预热）</span>'
+        : '<b>安静</b> <span class="muted">（纯按需，更新日首屏会明显变慢）</span>');
+    var mig = (d.stats && d.stats.migrate) || {};
+    var migAvg = mig.tries ? Math.round((mig.msTotal || 0) / mig.tries) : 0;
+    $('udMigrate').innerHTML = fmtNum(mig.tries || 0) + ' / <b>' +
+      fmtNum((mig.ok || 0) - (mig.refreshed || 0)) + '</b> / ' + fmtNum(mig.refreshed || 0) +
+      (mig.refreshed ? ' <span class="muted">(' + fmtBytes(mig.refreshedBytes || 0) + ')</span>' : '') +
+      ' <span class="muted">· 均 ' + migAvg + 'ms · 失败 ' + fmtNum(mig.failed || 0) + '</span>';
+    var fol = (d.stats && d.stats.follow) || {};
+    var fl = d.followLive || {};
+    $('udFollow').innerHTML = fmtNum(fl.active || 0) + ' / ' + fmtNum(fl.queued || 0) + ' / <b>' +
+      fmtNum(fol.ok || 0) + '</b> <span class="muted">（尝试 ' + fmtNum(fol.tried || 0) +
+      (fol.refreshed ? ' · 其中重下 ' + fmtNum(fol.refreshed) : '') + '）</span>';
+    var lastRep = d.stats && d.stats.report && d.stats.report.last;
+    if (lastRep && lastRep.summary) {
+      var repTime = new Date(lastRep.endedAt || Date.now());
+      $('udReport').innerHTML = '<b>最近战报</b>（' + repTime.toTimeString().slice(0, 8) + '）：' +
+        escapeHtml(lastRep.summary);
+    }
+  }
+
+  var box = $('xvBox');
+  if (!box) return;
+  if (!xv || !xv.seen) {
+    box.innerHTML = '<b>X-VERSION 观测</b>：还没见到游戏带这个头的请求' +
+      (xv && xv.assetRequests ? '（同期已见过 ' + fmtNum(xv.assetRequests) + ' 个素材请求：/assets/ 或 /assets_en/）' : '') +
+      '。这项只用来确认能否拿它判定资源版本，不影响缓存功能。';
+    return;
+  }
+  box.innerHTML = '<b>X-VERSION 观测</b>：共 ' + fmtNum(xv.seen) + ' 次（来自素材请求 ' +
+    fmtNum(xv.onAsset) + ' 次、其他请求 ' + fmtNum(xv.onOther) + ' 次；同期素材请求共 ' +
+    fmtNum(xv.assetRequests || 0) + ' 个 —— 含日语 /assets/ 与英语 /assets_en/）。最后值 <code>' + escapeHtml(String(xv.last || '-')) +
+    '</code>' + (xv.lastPath ? '，来自 <code>' + escapeHtml(String(xv.lastPath)) + '</code>' : '') + '。';
+}
+
+/* ---------------- 版本戳目录淘汰（V4.7.0） ----------------
+ *
+ * 背景：/assets/<数字戳>/（英语模式 /assets_en/<数字戳>/）的戳一变，旧目录就再也不会被请求，却一直占着磁盘。
+ * 这是本项目**唯一会成片删文件的入口**，所以刻意做成两步、且服务端 dryRun 默认开：
+ *   ① 先 POST 一次（不带 dryRun=0）拿到预览，把"将删哪些目录、多少文件、多少 MB"摆出来；
+ *   ② 用户确认后才显式带 dryRun=0 真删。
+ * 界面上显示的"可回收"来自扫描统计（不含 .ext 元数据），所以是约数；
+ * 确认框里的数字来自服务端实地清点，那个才是准的。
+ */
+var lastStampStatus = null;
+
+function renderEvict(d) {
+  var s = (d && d.stamps) || null;
+  if (s) lastStampStatus = s;
+  // V4.12.0：戳状况只在扫描后变化；「在用」集合也只按 24 小时窗口缓慢演进 —— 没变就跳过
+  if (!sigChanged('evict', s ? JSON.stringify([s.total, s.evictable, s.files, s.bytes, s.keep, s.inUse, s.evictNames]) : 'null')) return;
+  var btn = $('btnEvict'), msg = $('evictMsg');
+  if (!btn || !msg) return;
+  if (!s || !s.total) {
+    btn.disabled = true;
+    msg.textContent = '还没有扫描到版本戳目录。';
+    return;
+  }
+  if (!s.evictable) {
+    btn.disabled = true;
+    msg.textContent = '共 ' + s.total + ' 个版本戳目录，都在保留范围内（最新 2 个 + 最近仍在被请求的那些），没有可清理的。';
+    return;
+  }
+  btn.disabled = false;
+  var inUseTxt = (s.inUse && s.inUse.length)
+    ? '其中 ' + escapeHtml(s.inUse.join('、')) + ' 最近仍在被游戏请求，会保留。'
+    : '';
+  msg.innerHTML = '共 ' + s.total + ' 个版本戳目录，其中 <b>' + s.evictable + '</b> 个已过期：' +
+    '可回收约 <b>' + fmtBytes(s.bytes) + '</b>（' + fmtNum(s.files) + ' 个文件，不含元数据）。' +
+    inUseTxt + '过期的是：' + escapeHtml((s.evictNames || []).join('、'));
+}
+
+function evictStamps() {
+  var msg = $('evictMsg'), btn = $('btnEvict');
+  btn.disabled = true;
+  msg.textContent = '正在预览…';
+  // 第一步：预览（不带 dryRun=0 —— 服务端默认就是只预览）
+  fetch('/api/evict-stamps', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (p) {
+      if (!p || !p.ok || !p.evicted || !p.evicted.length) {
+        msg.textContent = (p && p.reason) ? p.reason : '没有可清理的过期版本戳。';
+        btn.disabled = false;
+        return;
+      }
+      var q = '将删除 ' + p.evicted.length + ' 个已过期的版本戳目录：\n  ' + p.evicted.join('、') +
+        '\n共 ' + fmtNum(p.files) + ' 个文件 / ' + fmtBytes(p.bytes) + '。\n\n' +
+        '保留：' + p.keep.join('、') + '\n\n' +
+        '删除不可撤销；游戏下次需要这些资源时会重新从源站下载。确定删除吗？';
+      if (!window.confirm(q)) {
+        msg.textContent = '已取消，什么都没删。';
+        btn.disabled = false;
+        return;
+      }
+      // 第二步：显式 dryRun=0 才真删
+      msg.textContent = '正在清理…';
+      return fetch('/api/evict-stamps?dryRun=0', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (e) {
+          msg.textContent = '已删除 ' + ((e && e.evicted) ? e.evicted.length : 0) + ' 个过期戳目录，回收 ' +
+            ((e && e.bytes) ? fmtBytes(e.bytes) : '—') +
+            ((e && e.errors && e.errors.length) ? '（' + e.errors.length + ' 项未成功）' : '');
+          btn.disabled = false;
+        });
+    })
+    .catch(function (err) {
+      msg.textContent = '操作失败：' + err;
+      btn.disabled = false;
+    });
+}
+
+// 串接用的本机代理还活着吗（V4.7.1 新增，V4.8.4 缩到"一行补注"）
+//
+// 沿革，别再往回改：
+//   V4.7.1  `hint warn` 常驻**警告横幅** → 用户看到的是"程序在反复报错"；
+//   V4.8.1  改成"安静的一行说明"（带排查建议与"每 2 分钟复查"）→ 用户仍反馈"怎么还在提示"；
+//   V4.8.4  降级成「其余流量去向」那行的**短补注**，并去掉全部催促式措辞。
+//
+// 想透的那一点：这是个**永久性**的背景事实（残留端口不会自己消失），
+// **只要它单独占一行、或者带一句"你可以去做点什么"，它就会永远占着屏幕**。
+// 它是**状态**不是待办 —— 界面上只留最短的事实，排查建议留在服务端日志的 `[链路]` 行里。
+function renderChain(d) {
+  var c = (d && d.chain) || null;
+  // V4.12.0：这是个"基本永远是空"的补注，更没必要每帧碰 DOM
+  if (!sigChanged('chain', c ? (String(c.alive) + '|' + (c.addr || '')) : 'null')) return;
+  var box = $('chainNote');
+  if (!box) return;
+  var c = (d && d.chain) || null;
+  if (c && c.alive === false && c.addr) {
+    box.style.display = '';
+    box.innerHTML = '（' + escapeHtml(c.addr) + ' 已失效，已从分流摘掉）';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function renderErrors(list) {
+  if (!sigChanged('errors', list.join('\u0001'))) return;   // V4.12.0：没变化不重绘
+  var card = $('errCard'), el = $('errList');
+  if (!list.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  el.innerHTML = list.slice(-6).map(function (e) { return '<div>' + escapeHtml(e) + '</div>'; }).join('');
+}
+
+/* ---------------- 交互 ---------------- */
+
+function rescan() {
+  var b = $('btnScan');
+  b.disabled = true; b.textContent = '扫描中…';
+  fetch('/api/scan').catch(function () {}).then(function () {
+    setTimeout(function () { b.disabled = false; b.textContent = '重新扫描'; }, 1500);
+  });
+}
+function runSelfTest() {
+  window.open('/test', '_blank');
+}
+
+/* ---------------- 按类型清理缓存 ---------------- */
+
+// 哪些类型可以直接在界面上一键清掉。只列"体积大且重新回源代价可控"的常见类型，
+// 不列出 .js/.json/.css 这类——删了它们下一次进游戏几乎必然触发重新拉取与重载，
+// 想清就用下面「自定义扩展名」自己填。
+var CLEANABLE = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp3', '.mp4', '.woff', '.woff2', '.ttf', '.ico'];
+
+function renderCleanPanel(c) {
+  var box = $('cleanBox'), rows = $('cleanRows');
+  if (!box || !rows) return;
+  var byExt = (c && c.byExt) || {};
+  var byBytes = (c && c.byExtBytes) || {};
+  var keys = Object.keys(byExt).filter(function (k) { return k.charAt(0) === '.'; });
+  if (!keys.length) { box.style.display = 'none'; return; }
+  box.style.display = '';
+
+  // 先列常用可清理类型，再列缓存里其它类型（都按数量倒排）
+  var common = CLEANABLE.filter(function (k) { return byExt[k]; });
+  var other = keys.filter(function (k) { return CLEANABLE.indexOf(k) === -1; })
+    .sort(function (a, b) { return byExt[b] - byExt[a]; });
+  var list = common.concat(other).slice(0, 14);
+
+  rows.innerHTML = list.map(function (ext) {
+    var n = byExt[ext], bs = byBytes[ext] || 0;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid #1c2230">' +
+      '<span style="width:74px;font-family:Consolas,monospace;color:var(--fg2)">' + escapeHtml(ext) + '</span>' +
+      '<span class="muted" style="flex:1">' + fmtNum(n) + ' 个 · ' + fmtBytes(bs) + '</span>' +
+      '<button onclick="cleanExt(\'' + escapeHtml(ext) + '\')" style="padding:2px 10px;font-size:12px">清理</button>' +
+      '</div>';
+  }).join('') +
+    '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">' +
+    '<input id="cleanCustom" type="text" placeholder="自定义扩展名，如 jpg,png" spellcheck="false" ' +
+    'style="width:200px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:12px Consolas,monospace">' +
+    '<button onclick="cleanExt(($(\'cleanCustom\')||{}).value||\'\')" style="font-size:12px">按此清理</button>' +
+    '</div>';
+}
+
+// 让用户确认时看到"将删多少个 / 多少 MB"：数据已经在界面上了，不必再往返一次预览
+function cleanExt(ext) {
+  ext = (ext || '').trim();
+  if (!ext) { $('cleanMsg').textContent = '请先填写要清理的扩展名'; return; }
+  var c = (lastData && lastData.cache) || {};
+  var byExt = c.byExt || {}, byBytes = c.byExtBytes || {};
+  var n = 0, bs = 0;
+  ext.split(',').forEach(function (e) {
+    e = e.trim().toLowerCase();
+    if (!e) return;
+    if (e.charAt(0) !== '.') e = '.' + e;
+    n += byExt[e] || 0;
+    bs += byBytes[e] || 0;
+  });
+
+  var tip = n ? ('将删除 ' + n + ' 个文件（' + fmtBytes(bs) + '）') : '缓存里没有该类型的文件';
+  if (!n) { $('cleanMsg').textContent = tip; return; }
+  if (!window.confirm('清理 ' + ext + ' 类型的缓存？\n\n' + tip +
+    '\n\n删除不可撤销；游戏下次需要这些资源时会重新从源站下载。')) return;
+
+  var msg = $('cleanMsg');
+  msg.textContent = '正在清理 ' + ext + ' …';
+  fetch('/api/clean-cache?ext=' + encodeURIComponent(ext), { method: 'POST', cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d.ok) { msg.innerHTML = '<span class="bad">清理失败：' + escapeHtml(d.error || '未知原因') + '</span>'; return; }
+      msg.innerHTML = '<span class="ok">已删除 ' + fmtNum(d.deleted) + ' 个文件，回收 ' +
+        fmtBytes(d.bytes) + '</span>' + (d.errors && d.errors.length ? '（' + d.errors.length + ' 项未成功）' : '');
+      // 服务端删完会自动重新扫描，这里等一下再刷新一次数字
+      setTimeout(function () { fetch('/api/stats', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(renderStats).catch(function () {}); }, 1200);
+    })
+    .catch(function (e) { msg.innerHTML = '<span class="bad">请求失败：' + escapeHtml(String(e)) + '</span>'; });
+}
+
+/* ---------------- 缓存目录管理 ---------------- */
+
+function toggleRootEdit(show) {
+  var box = $('rootEdit');
+  box.style.display = show ? '' : 'none';
+  $('rootMsg').textContent = '';
+  if (show) {
+    $('rootInput').value = (lastData && lastData.cache && lastData.cache.root) || '';
+    $('rootInput').focus();
+  }
+}
+
+function browseFolder() {
+  var msg = $('rootMsg'), b = $('btnBrowse');
+  // 这句话以前是直接写"已弹出文件夹选择框"—— 那是在替一件**还没发生**的事打保票：
+  // 对话框由服务端另起进程弹出，用户点了却看不到窗口时，界面这句话反而在说"已经弹了"，
+  // 让人以为是界面/程序坏了（实测踩过：对话框其实被别的窗口挡在后面，界面上却一口咬定弹了）。
+  // 现在改成"正在打开"，并给出没看到时的线索。
+  msg.textContent = '正在打开文件夹选择框…（没看到窗口？它可能被别的窗口挡住了，'
+    + '请在任务栏找「浏览文件夹」；本程序已把它置顶）';
+  b.disabled = true;
+  fetch('/api/browse-folder', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      b.disabled = false;
+      if (d.path) { $('rootInput').value = d.path; msg.textContent = '已选择：' + d.path; }
+      else { msg.textContent = '没有选择目录（或选择框被取消）'; }
+    })
+    .catch(function (e) { b.disabled = false; msg.textContent = '打开选择框失败：' + e; });
+}
+
+function saveCacheRoot() {
+  var path = $('rootInput').value.trim();
+  if (!path) { $('rootMsg').textContent = '请先填写目录路径'; return; }
+  var msg = $('rootMsg'), b = $('btnSaveRoot');
+  msg.textContent = '正在切换…'; b.disabled = true;
+
+  fetch('/api/set-cache-root?path=' + encodeURIComponent(path), { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      b.disabled = false;
+      if (!d.ok) { msg.innerHTML = '<span class="bad">切换失败：' + escapeHtml(d.error || '未知原因') + '</span>'; return; }
+      msg.innerHTML = '<span class="ok">已切换到新目录，正在重新统计…</span>';
+      setTimeout(toggleRootEdit.bind(null, false), 1800);
+    })
+    .catch(function (e) { b.disabled = false; msg.innerHTML = '<span class="bad">请求失败：' + e + '</span>'; });
+}
+
+/* ---------------- 缓存测试 ---------------- */
+
+function showTest(html) {
+  var o = $('testOut');
+  o.style.display = '';
+  o.innerHTML = html;
+}
+function testLine(cls, txt) {
+  return '<div class="' + cls + '" style="margin:1px 0">' + escapeHtml(txt) + '</div>';
+}
+
+function testWrite() {
+  var b = $('btnW');
+  b.disabled = true; b.textContent = '测试中…';
+  showTest('<div class="wait">正在测试目录可写性…</div>');
+  fetch('/api/test-write', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      b.disabled = false; b.textContent = '测试写入';
+      var h = '';
+      h += testLine(d.writable ? 'ok' : 'bad',
+        (d.writable ? '✓ 目录可写' : '✗ 目录不可写'));
+      h += testLine('dim', '  测试目录：' + d.root);
+      if (d.testFile) h += testLine('dim', '  实际写入：' + d.testFile + '（已删除）');
+      if (d.created) h += testLine('wait', '  （该目录原先不存在，已自动创建）');
+      if (d.freeBytes) h += testLine('dim', '  可用空间：' + fmtBytes(d.freeBytes));
+      (d.errors || []).forEach(function (e) { h += testLine('bad', '  ' + e); });
+      showTest(h);
+    })
+    .catch(function (e) { b.disabled = false; b.textContent = '测试写入'; showTest(testLine('bad', '请求失败：' + e)); });
+}
+
+function testCycle() {
+  var b = $('btnCycle');
+  b.disabled = true; b.textContent = '测试中…';
+  showTest('<div class="wait">正在挑选样本并向源站确认…（首次可能要十几秒）</div>');
+
+  fetch('/api/test-cache-cycle', { cache: 'no-store' })
+    .then(function (r) {
+      var reader = r.body.getReader();
+      var dec = new TextDecoder();
+      var buf = '';
+      function pump() {
+        return reader.read().then(function (res) {
+          if (res.done) return;
+          buf += dec.decode(res.value, { stream: true });
+          var chunks = buf.split(String.fromCharCode(10) + String.fromCharCode(10));
+          buf = chunks.pop();
+          chunks.forEach(function (c) {
+            var line = null;
+            c.split(String.fromCharCode(10)).forEach(function (l) { if (l.indexOf('data:') === 0) line = l; });
+            if (!line) return;
+            var obj;
+            try { obj = JSON.parse(line.slice(5).trim()); } catch (e) { return; }
+            if (obj.phase === 'done') renderCycleResult(obj.result);
+          });
+          return pump();
+        });
+      }
+      return pump();
+    })
+    .catch(function (e) { showTest(testLine('bad', '请求失败：' + e)); })
+    .then(function () { b.disabled = false; b.textContent = '测试完整缓存'; });
+}
+
+function renderCycleResult(r) {
+  if (!r) { showTest(testLine('bad', '没有拿到测试结果')); return; }
+  var h = '';
+  h += testLine(r.ok ? 'ok' : 'bad',
+    r.ok ? '✓ 缓存工作正常 —— 回源下载与写入都成功'
+         : '✗ 本次测试未通过');
+  h += '<div style="height:6px"></div>';
+  if (r.ok) {
+    h += testLine('dim', '测试样本：' + r.sample);
+    h += testLine('dim', '重新下载后 ' + fmtBytes(r.rewrittenBytes) +
+      (r.extWritten ? '，元数据已生成' : '，元数据缺失'));
+    if (r.writtenPath) h += testLine('ok', '实际写入到：' + r.writtenPath);
+  }
+  (r.steps || []).forEach(function (s) { h += testLine('dim', '  · ' + s); });
+  (r.errors || []).forEach(function (e) { h += testLine('bad', '  ' + e); });
+  showTest(h);
+}
+
+/* ---------------- 缓存接管状态探针 ----------------
+ * 请求一个源站上并不存在、只可能由本机服务提供的文件：
+ *   能加载 = 代理确实在接管并转发请求
+ *   加载失败 = 代理没接管（浏览器直接去源站要，源站没有它）
+ * 这是唯一能区分「代理失效」和「资源全在浏览器缓存里所以没请求」的办法。
+ */
+function renderExtBadge() {
+  var dot = $('extDot'), txt = $('extTxt');
+  var tk = takeoverState();
+  // system 模式看探针时间；off 模式探针不跑，退回「最近一次经过代理的请求时间」
+  var when = proxyMode === 'system' ? fmtClock(lastProbeAt) : fmtClock(proxyLastRequestAt);
+  if (!sigChanged('badge', tk + '|' + when)) return;   // V4.12.0：没变化不写 DOM
+  if (tk === 'ok') {
+    dot.className = 'dot on';
+    txt.textContent = '缓存接管正常' + when;
+  } else if (tk === 'okprobe') {
+    // system 模式：注册表已接管，只是本窗口的探针图片没走通 —— 不影响真实缓存
+    dot.className = 'dot on';
+    txt.textContent = '缓存接管正常（探针未通过，不影响使用）' + when;
+  } else if (tk === 'off') {
+    dot.className = 'dot off';
+    txt.textContent = (proxyMode === 'off' ? '缓存接管已关闭' : '未接管缓存') + when;
+  } else {
+    dot.className = 'dot idle';
+    txt.textContent = '状态未知' + when;
+  }
+}
+
+var lastProbeAt = null;
+
+var probeRetryTimer = null;
+var probeTimeoutTimer = null;
+
+function probeExtension() {
+  // 只有 system 模式需要探针：off 模式下没有任何窗口走代理，探针必然失败，
+  // 那会把「已关闭」误显示成「未接管」。
+  if (proxyMode !== 'system') {
+    extOk = null;
+    renderExtBadge();
+    renderStats(lastData || {});
+    return;
+  }
+  var img = new Image();
+  var done = false;
+  var settle = function (v) {
+    if (done) return;
+    done = true;
+    extOk = v;
+    lastProbeAt = Date.now();
+    renderExtBadge();
+    renderStats(lastData || {});
+    // 首次探测偶尔会超时（例如服务正在扫描 8 万个缓存文件，磁盘繁忙）。
+    // 这种情况不该让徽章停在「未知」整整一分钟，5 秒后立刻补一次。
+    if (v === null) {
+      clearTimeout(probeRetryTimer);
+      probeRetryTimer = setTimeout(probeExtension, 5000);
+    } else if (v === false) {
+      // 失败自愈：30 秒后重试。成功不重试。
+      // （探针跑在本窗口里，本窗口代理配置临时异常时会失败；30 秒后多半已恢复。）
+      clearTimeout(probeRetryTimer);
+      probeRetryTimer = setTimeout(probeExtension, 30000);
+    }
+  };
+  img.onload = function () { settle(true); };
+  img.onerror = function () { settle(false); };
+  clearTimeout(probeTimeoutTimer);
+  probeTimeoutTimer = setTimeout(function () { settle(null); }, 8000);
+  // 带随机参数：确保不被浏览器缓存，每次都真实走一次请求。
+  // 域名用资源 CDN（akamaized）：它在 PAC 里是无条件走代理的规则，且被全部游戏流量持续验证；
+  // 而「game 域名 + /assets/」这条规则在部分窗口实测不生效（探针直连源站 404），用它做探针会假警报。
+  img.src = 'https://prd-game-a-granbluefantasy.akamaized.net/assets/__gbfcache_selftest__.png?_=' + Date.now();
+}
+
+var lastData = null;
+
+/* ---------------- 数据连接 ---------------- */
+
+function loadInitial() {
+  fetch('/api/stats', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      (d.log || []).forEach(addLog);
+      renderStats(d);
+      if (d.cache && d.cache.scanning) { /* 等 SSE 通知 */ }
+    })
+    .catch(function () {});
+}
+
+// 关掉本窗口时主动告诉服务端一声（V4.13.3）。放在 connect() 外面：只注册一次。
+// 为什么不能只靠 SSE 断开：浏览器/系统可能把连接留成"半死"状态（窗口没了、socket 还挂着），
+// 服务端要等下一次 20 秒心跳写失败才发现 —— 表现就是"关掉控制台后很久悬浮窗才出来"。
+// sendBeacon 在页面卸载时也能可靠发出（fetch 会被取消）。
+// 只用 pagehide、**故意不用 visibilitychange**：最小化控制台不该被当成"关掉了"。
+// 刷新也会触发它，服务端那边有 5 秒宽限期兜着（新页面约 0.6 秒就连回来，实测）。
+window.addEventListener('pagehide', function () {
+  try { navigator.sendBeacon('/api/console-closing'); } catch (e) { /* 发不出去也没关系：服务端还有 SSE 断开兜底 */ }
+});
+
+/* ===================== 一键体检（V4.14.8） =====================
+   把散在自检页与统计里的环境检查合成一张红绿灯表：接管、根证书、缓存目录、
+   探针、PAC 分流。探针与 PAC 判定在本页就地执行（与 /test 同一原理）。
+   证书有问题时给「一键修复」按钮（POST /api/cert-fix）。 */
+
+function ckRowHtml(name, cls, note) {
+  return '<div style="display:flex;gap:10px;margin:4px 0;align-items:baseline">' +
+    '<span style="flex:none;width:74px" class="' + cls + '">' + name + '</span>' +
+    '<span style="min-width:0;word-break:break-all">' + note + '</span></div>';
+}
+
+// PAC 就地求值（与 /test 页同一套桩函数与工法）：回答"这条 URL 会被交给谁"。
+// ⚠️ 本文件是纯 HTML，正则用**单层**转义 —— /test 页里的双重转义是它嵌在
+// server.js 模板字符串里特有的，照搬过来会把正则写坏（第一版就踩了）。
+// PROXY_TXT 由服务端在送出页面时替换成真实代理地址（端口是运行时事实，不写死）。
+var PROXY_TXT = '__GBFCACHE_PROXY_TXT__';
+
+function pacLookup(text, url) {
+  var host = url.replace(/^https?:\/\//, '').split('/')[0];
+  function isPlainHostName(h) { return String(h).indexOf('.') === -1; }
+  function shExpMatch(str, pat) {
+    var re = '^' + String(pat).replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$';
+    try { return new RegExp(re).test(String(str)); } catch (e) { return false; }
+  }
+  function dnsDomainIs(h, d) { h = String(h); d = String(d); return h.length >= d.length && h.slice(-d.length) === d; }
+  function localHostOrDomainIs(h, hd) { h = String(h); hd = String(hd); return h === hd || h.indexOf(hd + '.') === 0; }
+  function dnsDomainLevels(h) { return (String(h).match(/\./g) || []).length; }
+  try {
+    var factory = new Function('isPlainHostName', 'shExpMatch', 'dnsDomainIs', 'localHostOrDomainIs',
+      'dnsDomainLevels', 'isResolvable', 'isInNet', 'dnsResolve', 'myIpAddress',
+      text + '\nreturn FindProxyForURL;');
+    var f = factory(isPlainHostName, shExpMatch, dnsDomainIs, localHostOrDomainIs,
+      dnsDomainLevels, function () { return false; }, function () { return false; },
+      function () { return null; }, function () { return '127.0.0.1'; });
+    return String(f(url, host));
+  } catch (e) { return '求值失败：' + e.message; }
+}
+
+function runCheckup() {
+  var btn = $('btnCheckup');
+  btn.disabled = true;
+  var rows = $('checkupRows');
+  rows.innerHTML = '<span class="wait">体检中…</span>';
+  $('checkupMsg').textContent = '';
+
+  fetch('/api/stats', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    var out = '';
+    out += ckRowHtml('服务', 'ok', '在线（' + escapeHtml(String(d.appVersion || '?')) + '）');
+    // 接管状态（pacMode=off / 临时直连是"配置如此"，用黄色；真故障才是红色）
+    var sp = d.systemProxy || {};
+    if (sp.mode && sp.mode !== 'system') {
+      out += ckRowHtml('接管', 'wait', '按配置让位（pacMode=' + escapeHtml(sp.mode) + '，缓存接管已关闭）');
+    } else if (sp.bypass) {
+      out += ckRowHtml('接管', 'wait', '临时直连中（缓存已暂停，点「恢复缓存接管」恢复）');
+    } else if (sp.installed) {
+      out += ckRowHtml('接管', 'ok', '已接管系统「自动配置脚本」');
+    } else if (sp.foreign && sp.foreign.url) {
+      out += ckRowHtml('接管', 'bad', '槽位被其他程序占用：<code>' + escapeHtml(sp.foreign.url) + '</code>　' +
+        escapeHtml(sp.foreign.reason || '') + '　可选：把加速器改为「静态代理」模式让本程序串接，或在其设置里关闭系统代理');
+    } else {
+      out += ckRowHtml('接管', 'bad', '未接管（自动配置脚本为空）');
+    }
+    // 根证书：有问题且拿得到修复命令时，直接给一键修复按钮
+    var c = d.cert || {};
+    if (c.state === 'ok') {
+      out += ckRowHtml('根证书', 'ok', '已装在「受信任的根证书颁发机构」');
+    } else if (c.fix) {
+      out += ckRowHtml('根证书', 'bad', escapeHtml(c.advice || c.state || '') + '　<button onclick="fixCert(this)">一键修复</button>');
+    } else {
+      out += ckRowHtml('根证书', 'bad', escapeHtml(c.advice || c.state || '未知'));
+    }
+    // 缓存目录
+    var ca = d.cache || {};
+    if (!ca.rootExists) {
+      out += ckRowHtml('缓存目录', 'bad', '目录不存在：' + escapeHtml(ca.root || '—'));
+    } else if (ca.writable === false) {
+      out += ckRowHtml('缓存目录', 'bad', '目录不可写：' + escapeHtml(ca.root || '—') + '（请在「缓存目录」卡里更换）');
+    } else {
+      out += ckRowHtml('缓存目录', 'ok', escapeHtml(ca.root || '—') + '（存在且可写）');
+    }
+    // 探针 / PAC 分流：异步，先占位，结果出来后原位替换
+    out += ckRowHtml('探针', 'wait', '检测中…（这张图只可能来自本机缓存服务）');
+    out += ckRowHtml('PAC 分流', 'wait', '检测中…');
+    rows.innerHTML = out;
+
+    var markRow = function (idxFromEnd, cls, note) {
+      var w = rows.children[rows.children.length - idxFromEnd];
+      if (w) w.outerHTML = ckRowHtml(idxFromEnd === 2 ? '探针' : 'PAC 分流', cls, note);
+    };
+    // 探针：源站不存在的图，能加载 = 请求确实到了本机
+    var probe = new Image();
+    var settled = false;
+    var markProbe = function (ok, note) {
+      if (settled) return; settled = true;
+      markRow(2, ok ? 'ok' : 'bad', note);
+    };
+    probe.onload = function () { markProbe(true, '通过 —— 资源请求确实到达了本机缓存服务'); };
+    probe.onerror = function () { markProbe(false, '没走通 —— 多半是分流没交给本程序或根证书未信任（详见「打开自检页」）'); };
+    setTimeout(function () { markProbe(false, '超时 —— 请确认服务在运行后重试'); }, 8000);
+    probe.src = 'https://prd-game-a-granbluefantasy.akamaized.net/assets/__gbfcache_selftest__.png?_=' + Date.now();
+
+    // PAC：就地求值三条代表性 URL（资源 CDN / 本站素材 / 本站接口）
+    fetch('/proxy.pac', { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (t) {
+      var cases = [
+        ['资源 CDN 应走本机', 'https://prd-game-a-granbluefantasy.akamaized.net/assets/x.png', true],
+        ['游戏本站 /assets/ 应走本机', 'https://game.granbluefantasy.jp/assets/x.png', true],
+        ['游戏接口必须直连', 'https://game.granbluefantasy.jp/rest/user/content/index', false],
+      ];
+      var bad = [];
+      cases.forEach(function (cs) {
+        var v = pacLookup(t, cs[1]);
+        var ours = v.indexOf(PROXY_TXT) !== -1;
+        if (cs[2] ? !ours : ours) bad.push(cs[0] + '（判定：' + escapeHtml(v) + '）');
+      });
+      if (bad.length) markRow(1, 'bad', '有 ' + bad.length + ' 条不符：' + escapeHtml(bad.join('；')));
+      else markRow(1, 'ok', '三条判定全部符合预期');
+    }).catch(function (e) {
+      markRow(1, 'bad', '取不到 /proxy.pac：' + escapeHtml(e.message));
+    });
+  }).catch(function (e) {
+    rows.innerHTML = ckRowHtml('服务', 'bad', '连不上 /api/stats：' + escapeHtml(e.message));
+  }).then(function () {
+    btn.disabled = false;   // 同步行先齐；探针/PAC 两行继续异步原位更新
+  });
+}
+
+function fixCert(btn) {
+  btn.disabled = true;
+  btn.textContent = '修复中…';
+  fetch('/api/cert-fix', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.ok && d.noop) {
+      $('checkupMsg').textContent = d.message || '无需修复';
+      btn.disabled = false; btn.textContent = '一键修复';
+    } else if (d.ok) {
+      $('checkupMsg').textContent = '修复命令已执行，最新状态：' + (d.cert && d.cert.state) + ' —— 正在重新体检';
+      runCheckup();
+    } else {
+      $('checkupMsg').textContent = '修复失败：' + (d.error || (d.results || []).map(function (x) { return x.note; }).filter(Boolean).join('；'));
+      btn.disabled = false; btn.textContent = '一键修复';
+    }
+  }).catch(function (e) {
+    $('checkupMsg').textContent = '修复失败：' + e.message;
+    btn.disabled = false; btn.textContent = '一键修复';
+  });
+}
+
+/* ===================== 设置面板（V4.15.2） =====================
+   页眉齿轮弹出的功能开关集合。滑块状态一律以 /api/settings 为准
+   （打开面板与每次切换成功后都重新拉一遍 —— 开机自启的状态在注册表里，
+   客户端不自己记）；切换失败时滑块自动弹回。 */
+var settingsOpen = false;
+
+function setSwitch(id, on) {
+  var el = $(id);
+  if (el) el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+function toggleSettings(ev) {
+  if (ev) ev.stopPropagation();
+  settingsOpen = !settingsOpen;
+  var p = $('settingsPanel');
+  if (!p) return;
+  if (!settingsOpen) { p.style.display = 'none'; return; }
+  // 先拉数据、装配滑块（装配期间禁用过渡），**再**显示面板 ——
+  // 否则面板先出现、状态后到达，所有旋钮当场从"关"滑到"开"，就是用户看到的闪烁。
+  p.classList.add('populating');
+  fetch('/api/settings', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.ok && d.settings) renderSettings(d.settings);
+      p.style.display = settingsOpen ? '' : 'none';
+      setTimeout(function () { p.classList.remove('populating'); }, 80);
+    })
+    .catch(function () {
+      p.classList.remove('populating');
+      p.style.display = settingsOpen ? '' : 'none';   // 数据拿不到也照常显示（滑块用当前状态兜底）
+    });
+}
+
+function renderSettings(s) {
+  var as = s.autoStartWithWindows || {};
+  setSwitch('swAutoStart', !!as.on);
+  var sw = $('swAutoStart');
+  if (sw) {
+    sw.disabled = !as.supported;
+    sw.title = as.supported ? '写入/移除系统启动项（当前用户）' : '仅发行版（GBFCache.exe）支持';
+  }
+  setSwitch('swAutoGame', s.autoLaunchGame);
+  setSwitch('swAutoAccel', s.autoLaunchAccel);
+  setSwitch('swOpenDash', s.openDashboardOnStart);
+  setSwitch('swPrewarm', s.prewarmEnabled);
+  setSwitch('swFollow', s.followEnabled);
+  var modeId = s.prewarmEnabled ? 'modeAggressive' : (s.followEnabled ? 'modeBalanced' : 'modeQuiet');
+  ['modeQuiet', 'modeBalanced', 'modeAggressive'].forEach(function (id) {
+    var b = $(id);
+    if (b) b.className = (id === modeId) ? 'mini on' : 'mini';
+  });
+  setSwitch('swMigrateOnly', s.prewarmMigrateOnly);
+  var mi = $('swMigrateOnly');
+  if (mi) mi.disabled = !s.prewarmEnabled;
+  setSwitch('swAutoEvict', s.autoEvictStamps);
+  setSwitch('swNotify', s.prewarmNotify);
+  setSwitch('btnBypass', s.cacheEnabled);
+  var note = $('cacheStateNote');
+  if (note) note.textContent = s.cacheEnabled ? '' : '（暂停中）';
+  setSwitch('tglFloat', s.floatOnConsoleClose);
+  setSwitch('swLightTheme', document.body.classList.contains('light'));   // 主题是本浏览器偏好，随面板刷新保持同步
+}
+
+function refreshSettings() {
+  fetch('/api/settings', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.ok && d.settings) renderSettings(d.settings);
+  }).catch(function () {});
+}
+
+function setFeature(name, btn) {
+  var on = btn.getAttribute('aria-checked') !== 'true';
+  btn.disabled = true;
+  fetch('/api/set-feature?name=' + encodeURIComponent(name) + '&on=' + (on ? '1' : '0'), { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      btn.disabled = false;
+      if (!d.ok) { refreshSettings(); return; }
+      setSwitch(btn.id, on);
+      refreshSettings();   // 开机自启要回读注册表实况；其余顺带刷新依赖关系（如预热关→只过户禁用）
+    })
+    .catch(function () { btn.disabled = false; });
+}
+
+// P0-5：更新日模式一键预设（安静/平衡/积极）—— 服务端会同时写 prewarmEnabled 与 followEnabled
+function setPrewarmMode(mode) {
+  fetch('/api/set-feature?name=prewarmMode&mode=' + encodeURIComponent(mode), { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function () { refreshSettings(); })
+    .catch(function () { refreshSettings(); });
+}
+
+document.addEventListener('click', function (ev) {
+  if (!settingsOpen) return;
+  var p = $('settingsPanel'), g = $('btnSettings');
+  if (p && !p.contains(ev.target) && g && !g.contains(ev.target)) {
+    settingsOpen = false;
+    p.style.display = 'none';
+  }
+});
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape' && settingsOpen) { settingsOpen = false; $('settingsPanel').style.display = 'none'; }
+});
+
+/* 白色主题（V4.15.3）：偏好存本浏览器的 localStorage，切换即时生效 */
+function applyTheme(light) {
+  document.body.classList.toggle('light', !!light);
+  setSwitch('swLightTheme', !!light);
+}
+
+function toggleTheme(btn) {
+  var on = btn.getAttribute('aria-checked') !== 'true';
+  try { localStorage.setItem('gbfTheme', on ? 'light' : 'dark'); } catch (e) { /* 隐私模式等存不上就算了 */ }
+  applyTheme(on);
+}
+
+// 更新日预热进度条（V4.14.11）：start/progress/done 三种相位。完成 8 秒后自动收起。
+var prewarmHideTimer = null;
+
+function renderPrewarm(d) {
+  var t = $('prewarmToast');
+  if (!t) return;
+  if (prewarmHideTimer) { clearTimeout(prewarmHideTimer); prewarmHideTimer = null; }
+  if (d.phase === 'start' || d.phase === 'progress') {
+    t.style.display = '';
+    t.innerHTML = '<b>检测到游戏资源更新</b>　后台预热中 ' + (d.done || 0) + '/' + (d.total || 0) +
+      '（复用 ' + (d.reused || 0) + ' / 预下载 ' + (d.refreshed || 0) + '）—— 完成后进游戏可直接命中';
+  } else if (d.phase === 'done') {
+    t.style.display = '';
+    t.innerHTML = '<b>预热完成</b>　复用 ' + (d.reused || 0) + ' / 预下载 ' + (d.refreshed || 0) +
+      ' / 跳过 ' + ((d.total || 0) - (d.reused || 0) - (d.refreshed || 0) - (d.failed || 0)) +
+      ' / 失败 ' + (d.failed || 0);
+    prewarmHideTimer = setTimeout(function () { t.style.display = 'none'; }, 8000);
+  }
+}
+
+// 更新日战报（P1-A，V4.18.0）：内容 = 服务端聚合好的 summary，展示 30 秒后自动收起。
+function renderReport(d) {
+  var t = $('prewarmToast');
+  if (!t || !d || !d.summary) return;
+  if (prewarmHideTimer) { clearTimeout(prewarmHideTimer); prewarmHideTimer = null; }
+  t.style.display = '';
+  t.innerHTML = '<b>更新日战报</b>　' + escapeHtml(d.summary);
+  prewarmHideTimer = setTimeout(function () { t.style.display = 'none'; }, 30000);
+}
+
+function connect() {
+  var es = new EventSource('/events');
+
+  es.addEventListener('open', function () {
+    connected = true;
+    $('liveDot').className = 'dot on';
+    $('liveTxt').textContent = '实时连接中';
+    renderStats(lastData || {});   // 连上后立刻重绘一次，免得横幅停留在"与服务断开"
+  });
+
+  es.addEventListener('log', function (ev) {
+    try { addLog(JSON.parse(ev.data)); } catch (e) {}
+  });
+
+  es.addEventListener('stats', function (ev) {
+    try { renderStats(JSON.parse(ev.data)); } catch (e) {}
+  });
+
+  es.addEventListener('scan', function (ev) {
+    try {
+      var d = JSON.parse(ev.data);
+      if (d.scanning) {
+        // 扫描开始：先让界面显示"扫描中…"
+        if (lastData && lastData.cache) { lastData.cache.scanning = true; renderCache(lastData.cache); }
+        return;
+      }
+      // 扫描结束：服务端把最新的 cacheInfo 一起广播过来，这里必须重绘。
+      // 否则点「重新扫描」之后卡片上的数字要刷新页面才会更新 ——
+      // 原先是 `if (d.scanning && globalThis.__cache)`，而 __cache 自始至终没被赋过值，
+      // 等于空转（本行同时修掉这处旧缺陷）。
+      if (d.info) {
+        if (lastData) lastData.cache = d.info;
+        renderCache(d.info);
+      }
+    } catch (e) {}
+  });
+
+  // 更新日预热实况（V4.14.11）：start / progress / done 三种相位，驱动顶部进度条
+  es.addEventListener('prewarm', function (ev) {
+    try { renderPrewarm(JSON.parse(ev.data)); } catch (e) {}
+  });
+
+  // 更新日战报（P1-A，V4.18.0）：版本切换安静下来后由服务端广播一次，复用提示条展示 30 秒
+  es.addEventListener('report', function (ev) {
+    try { renderReport(JSON.parse(ev.data)); } catch (e) {}
+  });
+
+  // 服务端在 /api/shutdown 里主动广播：是"它要关了"，不是网络抖动。
+  // 这条最可信，收到就立刻处理（下面 handleServiceGone 会关掉本窗口或给出指引）。
+  es.addEventListener('shutdown', function () {
+    serverSaidShutdown = true;
+    handleServiceGone();
+  });
+
+  es.addEventListener('error', function () {
+    connected = false;
+    $('liveDot').className = 'dot off';
+    $('liveTxt').textContent = '已断开，重连中…';
+    // EventSource 会自动重连
+  });
+}
+
+/* 服务没了怎么办：程序自己开的窗口要跟着关掉，用户浏览器里的标签页绝不能碰
+ *
+ * 背景（实测）：quit 之后原先只留一个显示「与服务断开」的死窗口挂在桌面上，
+ * 用户会以为进程没退干净。本程序开控制台用的是 Edge 的 --app= 模式，
+ * 这种窗口里 display-mode 是 standalone（已实测），而用户自己浏览器里的
+ * 普通标签页是 browser —— 靠这个就能精确区分，不会误关用户的浏览器窗口。
+ * 普通标签页不关窗口，只给明确指引（关不关是用户的事）。
+ */
+function handleServiceGone() {
+  if (goneHandled) return;
+  goneHandled = true;
+
+  var isAppWindow = false;
+  try { isAppWindow = window.matchMedia('(display-mode: standalone)').matches; } catch (e) {}
+
+  if (!isAppWindow) return;   // 普通标签页：交给上面的"与服务断开"横幅提示，不动窗口
+
+  var t = $('liveTxt');
+  if (t) t.textContent = '程序已退出，窗口即将关闭…';
+  var b = $('banner');
+  if (b) {
+    b.className = 'hint';
+    b.innerHTML = '<b>程序已退出</b> —— 本窗口即将自动关闭。要再用请从右下角托盘图标启动。';
+  }
+  // 留一点时间让上面的字显示出来，再自关（app 窗口允许脚本关闭，已实测）
+  setTimeout(function () { try { window.close(); } catch (e) {} }, 700);
+}
+
+/* 定期刷新一次完整数据，兜底 SSE 漏掉的缓存统计变化 */
+setInterval(function () {
+  fetch('/api/stats', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      pollFails = 0;
+      // 轮询成功就说明服务是通的 —— 别让"与服务断开"这种横幅因为 SSE 晚一步连上而误报
+      if (!connected) {
+        connected = true;
+        $('liveDot').className = 'dot on';
+        $('liveTxt').textContent = '实时连接中';
+      }
+      renderStats(d);
+    })
+    .catch(function () {
+      pollFails++;
+      // 连续 3 次（约 15 秒）都拿不到数据才认定服务已退出：
+      // 托盘「重启服务」那种几秒的空档不该把窗口关掉。
+      if (pollFails >= 3) handleServiceGone();
+    });
+}, 5000);
+
+loadInitial();
+connect();
+probeExtension();
+// 每 60 秒复核一次接管状态。
+// 注意：这个探测请求是内部健康检查，不会写入请求日志、也不计入任何统计
+//（否则每分钟一条假 HIT 会刷满日志，并让「缓存命中」数字失真）。
+setInterval(probeExtension, 60000);
+</script>
+</body>
+</html>

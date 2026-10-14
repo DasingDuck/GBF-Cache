@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>碧蓝幻想本地缓存程序 · GBF Cache</title>
+<meta name="description" content="把本机已有的游戏资源当 CDN 用：碧蓝幻想的图片、声音、脚本第一次看到时存一份在本地，之后直接从硬盘读，不再重新下载。Windows 单文件程序，零依赖。">
+<meta name="color-scheme" content="dark light">
+<meta property="og:title" content="碧蓝幻想本地缓存程序 · GBF Cache">
+<meta property="og:description" content="让游戏读本地文件，而不是重新下载。Windows 单文件程序，零依赖。">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<!-- ============ 顶部导航 ============ -->
+<header class="nav" id="nav">
+  <div class="nav-inner wrap">
+    <a class="brand" href="#top">
+      <span class="brand-logo" aria-hidden="true">GBF</span>
+      <span class="brand-text">
+        <strong>本地缓存程序</strong>
+        <em>碧蓝幻想 · Windows</em>
+      </span>
+    </a>
+    <nav class="nav-links" aria-label="页面导航">
+      <a href="#demo">请求演示</a>
+      <a href="#how">使用步骤</a>
+      <a href="#features">特性</a>
+      <a href="#layout">缓存布局</a>
+      <a href="#faq">常见问题</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="切换深浅色主题" title="切换深浅色主题">
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.8 1.8M16.8 16.8l1.8 1.8M18.6 5.4l-1.8 1.8M7.2 16.8l-1.8 1.8"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.4A8.4 8.4 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z"/></svg>
+      </button>
+      <a class="btn ghost sm" data-link="repo" href="#" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ 首屏 ============ -->
+<section class="hero" id="top">
+  <div class="hero-bg" aria-hidden="true">
+    <div class="glow g1"></div>
+    <div class="glow g2"></div>
+    <div class="grid-lines"></div>
+  </div>
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="dot-live"></span>当前版本 <b data-version>—</b> · 已在本机稳定运行</p>
+      <h1>把本机已有的游戏资源<br><span class="grad">当作 CDN 来用</span></h1>
+      <p class="lead">
+        碧蓝幻想的图片、声音、文字脚本，在第一次见到它们时顺手在你自己的电脑上存一份。
+        以后再打开游戏，这些资料直接从硬盘读出来，不用再上网重新下载 ——
+        <b>打开更顺、省流量，早年被下架的旧资源也还在。</b>
+      </p>
+      <div class="hero-btns">
+        <a class="btn primary" data-link="releases" href="#" rel="noopener">
+          <svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M12 3v11m0 0 4.2-4.2M12 14l-4.2-4.2M4.5 17.5v1.8A1.7 1.7 0 0 0 6.2 21h11.6a1.7 1.7 0 0 0 1.7-1.7v-1.8"/></svg>
+          下载 Windows 版
+        </a>
+        <a class="btn" href="#demo">看看它怎么工作</a>
+        <a class="btn ghost" data-link="repo" href="#" rel="noopener">浏览源码</a>
+      </div>
+      <ul class="hero-facts">
+        <li><b>零依赖</b><span>只用 Node 内置模块，连 npm install 都不需要</span></li>
+        <li><b>单文件</b><span>一个 exe 就是全部，不装运行库、不改游戏</span></li>
+        <li><b>不碰接口</b><span>只缓存资源；登录、抽卡等接口一律直连</span></li>
+      </ul>
+    </div>
+
+    <!-- 首屏装饰图：静态示意图，纯 CSS/SVG -->
+    <div class="hero-art" aria-hidden="true">
+      <div class="art-card">
+        <div class="art-head">
+          <span class="art-dot r"></span><span class="art-dot y"></span><span class="art-dot g"></span>
+          <em>请求走向</em>
+        </div>
+        <svg viewBox="0 0 380 250" class="art-svg">
+          <defs>
+            <linearGradient id="artAccent" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#1f6feb"/><stop offset="1" stop-color="#a371f7"/>
+            </linearGradient>
+          </defs>
+          <rect class="an" x="8" y="100" width="106" height="50" rx="11"/>
+          <text class="at" x="61" y="122">浏览器</text>
+          <text class="as" x="61" y="138">游戏页面</text>
+
+          <rect class="an hi" x="137" y="100" width="106" height="50" rx="11"/>
+          <text class="at" x="190" y="122">本程序</text>
+          <text class="as" x="190" y="138">127.0.0.1:8899</text>
+
+          <rect class="an" x="266" y="30" width="106" height="50" rx="11"/>
+          <text class="at" x="319" y="52">本地缓存</text>
+          <text class="as" x="319" y="68">硬盘上的文件</text>
+
+          <rect class="an" x="266" y="170" width="106" height="50" rx="11"/>
+          <text class="at" x="319" y="192">源站</text>
+          <text class="as" x="319" y="208">游戏服务器 / CDN</text>
+
+          <path class="al" d="M114 125 H137"/>
+          <path class="al" d="M243 125 H256 Q270 125 270 111 V85 Q270 71 284 71 H266" transform="translate(18 0)"/>
+          <path class="al" d="M243 125 H256 Q270 125 270 139 V165 Q270 179 284 179 H266" transform="translate(18 0)"/>
+          <path class="al di" d="M61 150 V226 Q61 240 75 240 H345 Q352 240 352 232 V220"/>
+          <circle class="ap" r="4.5" fill="url(#artAccent)">
+            <animateMotion dur="2.6s" repeatCount="indefinite" path="M114 125 H137"/>
+          </circle>
+          <circle class="ap" r="4.5" fill="#3fb950">
+            <animateMotion dur="2.6s" repeatCount="indefinite" path="M243 125 H256 Q270 125 270 111 V85 Q270 71 284 71 H266" transform="translate(18 0)"/>
+          </circle>
+        </svg>
+        <div class="art-foot"><span class="dot-live"></span>命中时完全不联网</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 请求演示 ============ -->
+<section class="sec" id="demo">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="sec-kicker">交互演示</p>
+      <h2>一次请求都经历了什么</h2>
+      <p class="sec-sub">
+        点下面三个按钮，看资源请求在本程序里怎么走。左边是路径动画，右边是控制台上真实的五个计数器。
+        <br><span class="hint">（演示为示意动画，数值非实测；机制与程序一致）</span>
+      </p>
+    </div>
+
+    <div class="demo">
+      <!-- 舞台 -->
+      <div class="demo-stage">
+        <div class="stage-tools">
+          <div class="seg" role="group" aria-label="选择场景">
+            <button type="button" class="seg-btn active" data-scene="hit">命中缓存</button>
+            <button type="button" class="seg-btn" data-scene="miss">首次下载</button>
+            <button type="button" class="seg-btn" data-scene="version">版本变了</button>
+            <button type="button" class="seg-btn" data-scene="direct">接口直连</button>
+          </div>
+          <label class="auto"><input type="checkbox" id="autoPlay"><span>自动播放</span></label>
+        </div>
+
+        <svg viewBox="0 0 720 372" class="stage-svg" id="stageSvg" role="img" aria-label="请求路径示意图">
+          <defs>
+            <linearGradient id="proxyGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#1f6feb"/><stop offset="1" stop-color="#a371f7"/>
+            </linearGradient>
+            <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="5" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- 连线（底） -->
+          <g class="wires">
+            <path id="w_b2p" d="M 166,180 H 272"/>
+            <path id="w_p2c" d="M 428,180 H 488 Q 500,180 500,168 V 72 Q 500,60 512,60 H 548"/>
+            <path id="w_p2o" d="M 428,180 H 488 Q 500,180 500,192 V 288 Q 500,300 512,300 H 548"/>
+            <path id="w_b2o" class="dash" d="M 91,212 V 330 Q 91,346 107,346 H 610 Q 626,346 626,330"/>
+          </g>
+
+          <!-- 高亮流（动画用） -->
+          <g class="flows">
+            <path class="flow" id="f_b2p" data-d="M 166,180 H 272"/>
+            <path class="flow" id="f_p2b" data-d="M 272,180 H 166"/>
+            <path class="flow" id="f_p2c" data-d="M 428,180 H 488 Q 500,180 500,168 V 72 Q 500,60 512,60 H 548"/>
+            <path class="flow" id="f_c2p" data-d="M 548,60 H 512 Q 500,60 500,72 V 168 Q 500,180 488,180 H 428"/>
+            <path class="flow" id="f_p2o" data-d="M 428,180 H 488 Q 500,180 500,192 V 288 Q 500,300 512,300 H 548"/>
+            <path class="flow" id="f_o2p" data-d="M 548,300 H 512 Q 500,300 500,288 V 192 Q 500,180 488,180 H 428"/>
+            <path class="flow" id="f_b2o" class="dash" data-d="M 91,212 V 330 Q 91,346 107,346 H 610 Q 626,346 626,330"/>
+            <path class="flow" id="f_o2b" class="dash" data-d="M 626,330 Q 626,346 610,346 H 107 Q 91,346 91,330 V 212"/>
+          </g>
+
+          <!-- 节点 -->
+          <g class="node" id="n_browser">
+            <rect x="16" y="148" width="150" height="64" rx="14"/>
+            <text class="nt" x="91" y="176">浏览器</text>
+            <text class="ns" x="91" y="194">游戏页面</text>
+          </g>
+          <g class="node proxy" id="n_proxy">
+            <rect x="272" y="148" width="156" height="64" rx="14"/>
+            <text class="nt" x="350" y="176">本程序</text>
+            <text class="ns" x="350" y="194">127.0.0.1:8899</text>
+          </g>
+          <g class="node" id="n_cache">
+            <rect x="548" y="28" width="156" height="64" rx="14"/>
+            <text class="nt" x="626" y="56">本地缓存</text>
+            <text class="ns" x="626" y="74">硬盘上的文件</text>
+          </g>
+          <g class="node" id="n_origin">
+            <rect x="548" y="268" width="156" height="64" rx="14"/>
+            <text class="nt" x="626" y="296">源站</text>
+            <text class="ns" x="626" y="314">游戏服务器 / CDN</text>
+          </g>
+
+          <text class="plabel" x="219" y="172">资源请求</text>
+          <text class="plabel dim" x="366" y="364">非 /assets/ 的接口请求走这条虚线，不进缓存</text>
+
+          <g id="packetWrap" class="packet-wrap">
+            <circle id="packet" r="7" filter="url(#softGlow)"/>
+            <circle id="packetCore" r="3"/>
+          </g>
+        </svg>
+
+        <!-- 版本比对卡（仅“版本变了”场景显示） -->
+        <div class="cmp" id="cmpCard" hidden>
+          <div class="cmp-col">
+            <span class="cmp-k">请求带来的版本</span>
+            <code class="cmp-v" id="cmpA">?1729002592</code>
+          </div>
+          <div class="cmp-mid" id="cmpOp">≠</div>
+          <div class="cmp-col">
+            <span class="cmp-k">本地文件记录的版本</span>
+            <code class="cmp-v" id="cmpB">?1728800731</code>
+          </div>
+          <p class="cmp-note" id="cmpNote">两串不一致 → 旧的绝不能当命中，必须回源取新的并覆盖</p>
+        </div>
+
+        <p class="stage-status" id="stageStatus">选择上面任意一个场景开始演示</p>
+      </div>
+
+      <!-- 右侧：计数器 + 日志 -->
+      <aside class="demo-side">
+        <div class="panel">
+          <div class="panel-head"><h3>计数器</h3><span class="panel-note">与程序控制台一致</span></div>
+          <div class="counters" id="counters">
+            <div class="counter c-hit"><b data-c="hit">0</b><span>缓存命中</span><em>未联网，直接读盘</em></div>
+            <div class="counter c-origin"><b data-c="origin">0</b><span>回源下载</span><em>缓存没有，已取源站</em></div>
+            <div class="counter c-store"><b data-c="store">0</b><span>新写入缓存</span><em>本次新增到磁盘</em></div>
+            <div class="counter c-block"><b data-c="block">0</b><span>异常拦截</span><em>正常应始终为 0</em></div>
+            <div class="counter c-error"><b data-c="error">0</b><span>错误</span><em>读盘 / 回源失败</em></div>
+          </div>
+        </div>
+        <div class="panel grow">
+          <div class="panel-head"><h3>实时请求日志</h3><span class="panel-note">自动滚动</span></div>
+          <ul class="loglist" id="logList">
+            <li class="logline empty">等待请求…</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 三步用起来 ============ -->
+<section class="sec alt" id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="sec-kicker">上手</p>
+      <h2>三步就能用</h2>
+      <p class="sec-sub">不需要装运行库，不需要浏览器插件，也不改动游戏本身。</p>
+    </div>
+    <ol class="steps">
+      <li class="step">
+        <span class="step-no">1</span>
+        <h3>解压到固定文件夹</h3>
+        <p>把压缩包整个解压出来，别只把里面的程序单独拿走 —— 旁边那几个文件都是配套的。路径里建议不要用特殊符号。</p>
+      </li>
+      <li class="step">
+        <span class="step-no">2</span>
+        <h3>装一次随包的证书</h3>
+        <p>程序需要这张证书才能看懂游戏和电脑之间的来往。双击证书文件 → 按提示一路下一步，注意选到「受信任的根证书颁发机构」。<b>不需要管理员权限</b>，装完请把浏览器完全关掉再打开。</p>
+      </li>
+      <li class="step">
+        <span class="step-no">3</span>
+        <h3>双击启动，正常玩</h3>
+        <p>右下角出现小图标，控制台窗口点「启动游戏」即可。判断它在工作最简单的一招：<b>看「缓存命中」在不在涨</b>。</p>
+      </li>
+    </ol>
+    <div class="note-card">
+      <svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M12 8.6v5m0 3.2h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+      <p><b>退出请用托盘菜单里的「退出」，不要强行结束进程。</b>程序启动时会接管一次系统里的上网设置，优雅退出才会把它还原回去。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 特性 ============ -->
+<section class="sec" id="features">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="sec-kicker">特性</p>
+      <h2>它凭什么又快又稳</h2>
+      <p class="sec-sub">下面每一条都是程序里真实存在的机制，不是宣传词。</p>
+    </div>
+    <div class="feat-grid">
+      <article class="feat">
+        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3.5 3.5 9v11.5h17V9L15 3.5M4 9h16M12 3.5V9"/></svg></span>
+        <h3>零依赖 · 单文件</h3>
+        <p>只用 Node 内置模块写成，一个 exe 就是全部。不装运行库、不写系统目录、不注册服务。</p>
+      </article>
+      <article class="feat">
+        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
+        <h3>只碰资源，不碰账号</h3>
+        <p>只接管 <code>/assets/</code> 的 GET/HEAD；登录、抽卡等 <code>/rest/ /ob/ /od/</code> 接口一律直连，<code>/user/</code> 绝不拦截。</p>
+      </article>
+      <article class="feat">
+        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5M12 7.5V12l3 2M16 3.5h4.5V8"/></svg></span>
+        <h3>认得出「资源版本」</h3>
+        <p>游戏的资源 URL 带 <code>?1729002592</code> 这类版本参数。版本不一致的文件绝不当命中，避免游戏判定版本不符而反复整页重载。</p>
+      </article>
+      <article class="feat">
+        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 20 8v8l-8 4.5L4 16V8z"/><path d="m4 8 8 4.5L20 8M12 12.5v8"/></svg></span>
+        <h3>元数据跟着文件走</h3>
+        <p>内容类型与 CORS 头跟资源一起存在旁边的 <code>.ext</code> 里，命中时原样回给浏览器 —— 带 <code>crossorigin</code> 的脚本才不会被拦。</p>
+      </article>
+      <article class="feat">
+        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg></span>
+        <h3>原子写 + 并发合并</h3>
+        <p>先写临时文件再改名，断电也不会留下半个文件；同一份资源的并发请求只回源一次。</p>
+      </article>
+      <article class="feat">
+        <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 18V6m0 12h17M7 15l3.5-4 3 2.5L18 8"/></svg></span>
+        <h3>一切都看得见</h3>
+        <p>命中、回源、新写入、异常拦截、错误五个计数实时推到控制台和桌面悬浮条，命不命中一眼就知道。</p>
+      </article>
+    </div>
+    <details class="deep">
+      <summary>还想知道更细的机制？</summary>
+      <div class="deep-body">
+        <p><b>版本切换预热。</b>游戏换版本戳时（路径里的那串数字变了），程序会在后台对上一任戳的同名文件向源站发条件请求：
+          源站回 304 就把旧文件「过户」到新路径（零下载），回 200 说明内容真的变了、提前下好。
+          这把更新日要重下的量，从「全部文件」压到「真正变了的文件」。</p>
+        <p><b>旧戳清理。</b>被请求过的版本戳会记下最后请求时间，超过 24 小时没被用到就不算「在用」，控制台里可以据此清掉过期的那一批。</p>
+        <p><b>缓存文件布局。</b><code>&lt;缓存目录&gt;/assets/…</code> 完全镜像资源 URL 的路径，旁边一份同名 <code>.ext</code> 记录元数据。
+          查询串不进文件名，但会记进 <code>.ext</code> 的 <code>q</code> 字段参与命中比对。</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ============ 缓存布局解释器 ============ -->
+<section class="sec alt" id="layout">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="sec-kicker">动手试试</p>
+      <h2>这条 URL 会被怎么处理</h2>
+      <p class="sec-sub">改一改下面的地址，看它落在磁盘哪里、元数据长什么样、会不会被缓存。</p>
+    </div>
+
+    <div class="explorer">
+      <div class="exp-input">
+        <label for="urlInput">资源地址</label>
+        <input id="urlInput" type="text" spellcheck="false" autocomplete="off"
+               value="https://prd-game-a-granbluefantasy.akamaized.net/assets/1789531866/img/sp/ui/btn_ability.png?1729002592">
+      </div>
+      <div class="exp-presets" role="group" aria-label="示例地址">
+        <button type="button" class="chip" data-url="https://prd-game-a-granbluefantasy.akamaized.net/assets/1789531866/img/sp/ui/btn_ability.png?1729002592">图片（CDN）</button>
+        <button type="button" class="chip" data-url="https://game.granbluefantasy.jp/assets/1789531866/js/main.js?1729002592">脚本（本域）</button>
+        <button type="button" class="chip" data-url="https://game.granbluefantasy.jp/assets_en/1789531866/img/sp/ui/btn_ability.png">英语素材</button>
+        <button type="button" class="chip" data-url="https://game.granbluefantasy.jp/assets/1789531866/voice/1/1001_a_1.m4a">语音</button>
+        <button type="button" class="chip" data-url="https://game.granbluefantasy.jp/rest/user/status">接口（直连）</button>
+        <button type="button" class="chip" data-url="https://example.com/assets/a.png">其它站点（直连）</button>
+      </div>
+
+      <div class="exp-out" id="expOut">
+        <div class="verdict" id="verdict">
+          <span class="vbadge" id="verdictBadge">缓存</span>
+          <span class="vtext" id="verdictText"></span>
+        </div>
+        <dl class="exp-rows">
+          <div class="exp-row"><dt>缓存键（URL 路径）</dt><dd><code id="outKey">—</code></dd></div>
+          <div class="exp-row"><dt>磁盘位置</dt><dd><code id="outPath">—</code></dd></div>
+          <div class="exp-row"><dt>同目录的元数据</dt><dd><code id="outExt">—</code></dd></div>
+        </dl>
+        <div class="exp-json">
+          <div class="exp-json-head"><span id="jsonTitle">.ext 内容</span><button class="mini" id="copyJson" type="button">复制</button></div>
+          <pre id="jsonOut" class="code">—</pre>
+        </div>
+        <ul class="exp-why" id="whyList"></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 控制台预览 ============ -->
+<section class="sec" id="console">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="sec-kicker">界面</p>
+      <h2>控制台：一眼看清它在干什么</h2>
+      <p class="sec-sub">五个计数器、实时请求日志、缓存库概况、版本戳清理、系统代理与加速器共存状态，都在这一页里。</p>
+    </div>
+    <figure class="shot">
+      <div class="shot-frame">
+        <div class="shot-bar"><span class="art-dot r"></span><span class="art-dot y"></span><span class="art-dot g"></span><em>碧蓝幻想本地缓存程序 · 控制台</em></div>
+        <img src="assets/console.png" alt="控制台界面：顶部是五个计数器和启动按钮，下面左侧是实时请求日志，右侧是缓存库概况与缓存目录操作。" loading="lazy" width="1400" height="1128">
+      </div>
+      <figcaption>控制台界面（早期版本 V4.8.9 预览）。界面支持深浅两套主题，也可以最小化到托盘，关闭窗口不影响缓存功能。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 常见问题 ============ -->
+<section class="sec alt" id="faq">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="sec-kicker">常见问题</p>
+      <h2>你可能想问的</h2>
+    </div>
+    <div class="acc" id="acc">
+      <details>
+        <summary>需要再装别的东西吗？</summary>
+        <p>不需要。不用装任何额外的运行库，也不用装浏览器插件。下载、解压、拖出来就能跑。</p>
+      </details>
+      <details>
+        <summary>用哪个浏览器？</summary>
+        <p>都可以。只有火狐（Firefox）需要多做一小步：把随包的那张证书也装进火狐自己的列表里，或者按说明里的那条设置打开。不做这一步的话，游戏里的图片可能显示不出来。</p>
+      </details>
+      <details>
+        <summary>会占多少硬盘？</summary>
+        <p>就是它帮你存下来的那些游戏资料本身，刚开始很小，玩得越久越多。控制台里可以按类型查看和清理 —— 清理只删你选的那一类，删掉的资料游戏下次需要时会自己重新下载。</p>
+      </details>
+      <details>
+        <summary>会不会影响我电脑上的别的东西？</summary>
+        <p>程序只在你自己的电脑内部工作，不对外开放任何东西。它启动时会接管一次你系统里的上网设置，所以退出时请用它托盘菜单里的「退出」，不要强行结束它 —— 那样设置可能不会还原回来。</p>
+      </details>
+      <details>
+        <summary>为什么「缓存命中」不涨？</summary>
+        <p>先看控制台顶部的状态提示。常见原因有两个：一是浏览器还在用它自己的缓存，没有把请求交给本程序（重启浏览器即可）；二是系统里的「自动配置脚本」没有指向本程序，控制台里可以重新检测并修复。</p>
+      </details>
+      <details>
+        <summary>能装几台电脑？需要什么系统？</summary>
+        <p>自己用没问题，请只用于你自己的电脑和账号（见下面的声明）。系统要求是 64 位的 Windows 10 或 Windows 11。</p>
+      </details>
+      <details>
+        <summary>它会修改游戏本身吗？</summary>
+        <p>不会。它不碰游戏文件、不改游戏代码，只是在游戏和网络之间做一次「有本地副本就先读本地」的选择。</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 免责声明 ============ -->
+<section class="sec" id="disclaimer">
+  <div class="wrap">
+    <div class="disc">
+      <div class="disc-head">
+        <svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M12 3.5 3.5 20h17zM12 9.5v5m0 2.6h.01"/></svg>
+        <h2>免责声明</h2>
+      </div>
+      <ol class="disc-list">
+        <li><b>非官方。</b>本程序是个人制作的第三方小工具，与游戏开发 / 运营方（Cygames）及《碧蓝幻想》官方没有任何关系，也不是官方工具。使用中遇到任何问题，请不要去找游戏官方。</li>
+        <li><b>不含游戏内容。</b>本程序本身不包含任何游戏资料。你电脑里存下来的那些资料，是程序在你使用时从游戏那边取回并保存在本地的，只存在于你自己的电脑上。</li>
+        <li><b>仅供个人使用。</b>请只用于你自己的电脑、你自己的账号。请勿把存下来的游戏资料上传、分享或以任何形式公开传播 —— 那些内容属于游戏公司。</li>
+        <li><b>风险自负。</b>本程序按「现状」提供。使用过程中可能出现的账号、系统或数据方面的问题，由使用者自行承担，作者不提供担保也不承担责任。</li>
+        <li><b>请遵守规则。</b>请遵守游戏的服务条款以及你所在地区的相关法律。如果游戏官方明确表示不允许这类做法，请立即停止使用并删除本程序。</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ 页脚 ============ -->
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <div class="foot-brand">
+      <span class="brand-logo" aria-hidden="true">GBF</span>
+      <div>
+        <strong>碧蓝幻想本地缓存程序</strong>
+        <p>当前版本 <b data-version>—</b> · Windows 10 / 11 x64</p>
+      </div>
+    </div>
+    <nav class="foot-links" aria-label="相关链接">
+      <a data-link="repo" href="#" rel="noopener">GitHub 仓库</a>
+      <a data-link="releases" href="#" rel="noopener">下载最新版</a>
+      <a data-link="issues" href="#" rel="noopener">反馈问题</a>
+      <a href="#top">回到顶部</a>
+    </nav>
+    <p class="foot-note">本页面与程序均为个人作品，与 Cygames 及《碧蓝幻想》官方无任何关系。</p>
+  </div>
+</footer>
+
+<script src="assets/version.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
