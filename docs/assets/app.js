@@ -538,33 +538,6 @@
     b.addEventListener('click', function () { showPanel(b.getAttribute('data-panel')); });
   });
 
-  // 六个面板内容长短不一，切换时右栏会一页一个高度、整页跟着跳。
-  // 这里量出最高的一页，把容器 min-height 钉在那个值上 —— 全部同高。
-  // 窄屏是上下堆叠（左栏变横排），一页可能上千像素，钉死会留大片空白，所以不钉。
-  var gWrap = $('.guide-panels');
-  function syncPanelHeight() {
-    if (!gWrap) return;
-    if (window.matchMedia('(max-width:900px)').matches) { gWrap.style.minHeight = ''; return; }
-    var max = 0;
-    gPanels.forEach(function (pl) {                 // 临时摆出来量，量完立刻还原（不可见，不会闪）
-      pl.style.position = 'absolute';
-      pl.style.visibility = 'hidden';
-      pl.style.display = 'block';
-      max = Math.max(max, pl.offsetHeight);
-      pl.style.display = '';
-      pl.style.visibility = '';
-      pl.style.position = '';
-    });
-    if (max > 0) gWrap.style.minHeight = max + 'px';
-  }
-  syncPanelHeight();
-  window.addEventListener('load', syncPanelHeight);
-  var rsTimer = null;
-  window.addEventListener('resize', function () {
-    clearTimeout(rsTimer);
-    rsTimer = setTimeout(syncPanelHeight, 200);
-  });
-
   // 顶部导航与页脚里的 #demo / #how … 也要能切到对应面板
   $$('a[href^="#"]').forEach(function (a) {
     a.addEventListener('click', function () {

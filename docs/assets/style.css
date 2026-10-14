@@ -236,7 +236,43 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .g-item.is-active .g-label{font-size:16.5px;font-weight:700}
 @media (prefers-reduced-motion:reduce){ .g-dot,.g-label{transition:none} }
 
-.guide-panels{min-width:0;position:relative}   /* 高度由 JS 统一成最高那一页：切换时不再跳动 */
+/* 固定高度：以首屏那种"一眼看完"的量级为准（660px）。
+   所有面板内容都按这个高度重新排过，切换时右栏纹丝不动。 */
+.g-panel{scroll-margin-top:88px}
+.guide .sec-head{margin-bottom:18px}
+.guide .sec-head h2{font-size:clamp(20px,2.2vw,26px);margin-bottom:8px}
+.guide .sec-head .sec-sub{font-size:14.2px}
+.guide .sec-kicker{margin-bottom:11px}
+.guide .sec-head::after{bottom:-12px}
+.guide .demo-side{gap:14px}
+.guide .panel.grow{min-height:186px}
+.guide .counter{padding:10px 12px}
+.guide .counter b{font-size:22px}
+.guide .stage-status{min-height:44px;padding:11px 14px;font-size:13.6px}
+.guide .loglist{max-height:186px;font-size:11.8px}
+.guide .feat{padding:18px 18px}
+.guide .feat-ic{width:34px;height:34px;margin-bottom:10px}
+.guide .feat-ic svg{width:17px;height:17px}
+.guide .feat h3{font-size:15.5px;margin-bottom:6px}
+.guide .feat p{font-size:13.6px;line-height:1.6}
+.guide .deep{margin-top:18px}
+.guide .step{padding:20px 20px}
+.guide .step p{font-size:14px}
+.guide .note-card{margin-top:18px}
+.acc-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+@media (max-width:860px){ .acc-cols{grid-template-columns:minmax(0,1fr)} }
+.guide .acc summary{padding:13px 18px;font-size:14.8px}
+.guide .acc p{padding:0 18px 15px;font-size:14px}
+.guide .disc{padding-bottom:20px}
+.guide .disc-head{padding:13px 22px;margin-bottom:14px}
+.guide .disc-list{padding:0 22px 0 40px;gap:9px}
+.guide .disc-list li{font-size:13.9px}
+.guide-panels{
+  min-width:0;position:relative;
+  /* 固定高度：以"一眼看完"为准，随屏幕自适应（600–720px）。
+     所有面板内容都按这个量级重排过，切换时右栏纹丝不动。 */
+  min-height:clamp(600px, calc(100vh - 160px), 740px);
+}
 .g-panel{display:none}
 /* 面板统一高度（由 JS 按最高的一页钉在容器 min-height 上）。
    内容比固定的高度短时垂直居中，留白看起来是排版有意为之，而不是"没写完"。
@@ -250,6 +286,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 @media (prefers-reduced-motion:reduce){ .g-panel.is-active{animation:none} }
 
 @media (max-width:900px){
+  .guide-panels{min-height:0}   /* 窄屏按内容自然高 */
   .guide-inner{grid-template-columns:minmax(0,1fr);gap:26px}
   .guide-nav{position:static}
   .guide-nav ul{display:flex;gap:4px;overflow-x:auto;padding:2px 0 10px}
@@ -747,3 +784,36 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
   .btn:hover,.step:hover,.feat:hover,.chip:hover{transform:none}
 }
 :focus-visible{outline:2px solid var(--a1-ink);outline-offset:3px;border-radius:6px}
+
+/* ---------- 面板重排：解释器左右两栏（放末尾以确保压过基础规则） ---------- */
+/* 解释器重排：地址栏整宽在上，左列示例、右列判定结果，依据说明跨栏压在下面。
+   一屏内就能看完"输入 → 判定 → 依据"这条链，不必纵向滚。 */
+.explorer{
+  display:grid;
+  grid-template-columns:minmax(0,264px) minmax(0,1fr);
+  grid-template-rows:auto auto auto;
+  grid-template-areas:"input input" "presets out" "why why";
+}
+.exp-input{grid-area:input;padding:16px 18px 0}
+.exp-presets{grid-area:presets;padding:14px 18px 18px;align-content:start}
+.exp-out{grid-area:out;border-top:0;border-left:1px solid var(--line2);padding:16px 18px}
+.exp-why{
+  grid-area:why;margin:0;padding:11px 18px;border-top:1px solid var(--line2);
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 26px;
+}
+.exp-why li{border-bottom:0;padding-bottom:0}
+.exp-out .exp-rows{margin-bottom:13px;gap:7px}
+.exp-out .exp-row{grid-template-columns:78px minmax(0,1fr)}
+.exp-out .exp-row code{font-size:12px;padding:4px 9px}
+.exp-out .exp-json .code{max-height:96px;overflow:auto;font-size:12px}
+.exp-out .verdict{margin-bottom:13px}
+@media (max-width:760px){
+  .explorer{grid-template-columns:minmax(0,1fr);grid-template-areas:"input" "presets" "out" "why"}
+  .exp-out{border-left:0;border-top:1px solid var(--line2)}
+  .exp-why{grid-template-columns:minmax(0,1fr)}
+}
+}
+
+/* 面板重排：演示页再收一点，正好落在固定高度里 */
+.guide .panel.grow{min-height:170px}
+.guide .loglist{max-height:170px}
