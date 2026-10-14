@@ -397,7 +397,6 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .stage-svg .node rect{filter:drop-shadow(0 2px 6px rgba(31,41,55,.10))}
 .stage-svg .node.proxy rect{stroke:var(--a2-ink);stroke-width:2.2;fill:color-mix(in srgb,var(--a2-ink) 8%,var(--panel2))}
 .stage-svg .nt{fill:var(--fg);font-size:17px;font-weight:600;text-anchor:middle}
-.stage-svg .ns{fill:var(--dim2);font-size:12.6px;text-anchor:middle}
 .stage-svg .plabel{fill:var(--dim2);font-size:12.4px;text-anchor:middle}
 .stage-svg .plabel.dim{font-size:11.6px;opacity:.85}
 .stage-svg .node.flash-ok rect{stroke:var(--ok);fill:color-mix(in srgb,var(--ok) 14%,var(--panel2))}
