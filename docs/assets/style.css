@@ -659,6 +659,16 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 /* 直角之后没有圆角要裁，放开 overflow */
 .cache-card,.demo-stage,.panel,.explorer,.acc,.disc,.exp-json{overflow:visible}
 
+/* ---------- 渐变 + 边框的两个坑 ----------
+   background 简写会把 background-origin 重置成初始值 padding-box，
+   而 background-clip 的初始值是 border-box。于是一个带透明边框的元素
+   （按钮、徽标、胶囊、图标瓦片）会出现：渐变按 padding box 定尺寸，
+   却要铺满到 border box —— 那 1px 边框区露的是渐变"平铺回来"的另一头，
+   看起来就是两端各有一条对向颜色的细线。让 origin 跟 clip 对齐即可。 */
+.btn.primary,.brand-logo,.step-no,.seg-btn.active,.chip.on,.feat-ic{
+  background-origin:border-box;
+}
+
 /* ---------- 滚动进场 ----------
    用纯 CSS 的滚动驱动动画（animation-timeline: view()）而不是 JS + IntersectionObserver。
    为什么：JS 方案要把内容先设成 opacity:0 再等回调点亮，而回调/定时器/帧一旦被节流
