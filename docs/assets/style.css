@@ -1,41 +1,30 @@
 /* ==========================================================================
    碧蓝幻想本地缓存程序 · GitHub Pages 站点样式
-   色板与控制台（dashboard.html）保持一致：深色为默认，浅色为 body.light
+   白色主题（单一主题，不做深浅切换）：
+     · 底色是接近白的中性灰，面板纯白
+     · 品牌色=暖色对（橙 → 玫红）；状态语义五色与控制台保持一致
    零外部依赖：不引任何 CDN 字体 / 框架
    ========================================================================== */
 
+/* ============ 令牌（唯一一套：白色主题） ============ */
 :root{
-  color-scheme:dark;   /* 让复选框、滚动条等原生控件跟随主题 */
-  --bg:#0f1012; --bg-soft:#131417; --panel:#18191d; --panel2:#1e2024;
-  --line:#292b30; --line2:#373a41;
-  --fg:#e9eaec; --fg2:#c7c9cd; --dim:#8b8e95; --dim2:#71747b;
-  /* 只有 --c1 一个强调色（青），只用于交互与结构（编号/悬停/聚焦/选区…）；
-     其余彩色一律是状态语义（ok / warn / err / info / store），不拿去做装饰。 */
-  --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#58a6ff; --store:#a371f7;
-  /* 品牌双色：青绿 → 品红（刻意避开"蓝紫"那套 AI 默认配色） */
-  --a1:#2dd4bf; --a2:#f472b6;
-  --hi:color-mix(in srgb,var(--a2) 34%,var(--line));   /* 悬停边框 */
-  /* 品牌渐变：链接文字、按钮、数字、图标瓦片都用它 */
-  --brand:linear-gradient(120deg,var(--a1),var(--a2));
-  --stroke:rgba(238,236,231,.92);                      /* 线条墨色（深色主题是白粉笔） */
-  --shadow:0 12px 34px rgba(0,0,0,.42);
-  --shadow-sm:0 4px 14px rgba(0,0,0,.28);
-  --r:14px; --r-sm:10px;
-  --maxw:1180px;
-}
-
-body.light{
   color-scheme:light;
-  --bg:#f1f4f9; --bg-soft:#fafbfd; --panel:#ffffff; --panel2:#f6f8fb;
-  --line:#e5e9f0; --line2:#ccd4e0;
-  --fg:#0c1118; --fg2:#232a33; --dim:#545e6b; --dim2:#6b7683;
+  --bg:#f4f5f7; --bg-soft:#fafbfc; --panel:#ffffff; --panel2:#f6f7f9;
+  --line:#e8e9ec; --line2:#d4d6da;
+  --fg:#111418; --fg2:#272c33; --dim:#565d68; --dim2:#6d747e;
+  /* 状态语义五色：与控制台（dashboard.html）五个计数器一一对应 */
   --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#0969da; --store:#8250df;
-  --a1:#0f766e; --a2:#c2255c;                          /* 浅色下各深一档，白底上对比才够 */
-  --hi:color-mix(in srgb,var(--a2) 32%,var(--line2));
-  --brand:linear-gradient(120deg,var(--a1),var(--a2));
-  --stroke:rgba(26,29,34,.92);
+  /* 品牌暖色对：橙 → 玫红。刻意不用蓝紫（AI 默认配色），也不用青绿+品红
+     （两个冷色暗端混出来的中间色发灰，在白底上发脏）；暖色对的中间是饱和珊瑚色。 */
+  --a1:#ea580c; --a2:#db2777;
+  --hi:color-mix(in srgb,var(--a2) 30%,var(--line2));   /* 悬停边框 */
+  --brand:linear-gradient(120deg,var(--a1),var(--a2));  /* 标题/按钮/数字/图标的渐变 */
+  --stroke:rgba(26,29,34,.92);                          /* 框架构造线的墨色 */
+  --inner:inset 0 1px 0 rgba(255,255,255,.9);
   --shadow:0 14px 34px rgba(23,35,58,.11);
   --shadow-sm:0 4px 12px rgba(23,35,58,.07);
+  --r:14px; --r-sm:10px;
+  --maxw:1180px;
 }
 
 *{box-sizing:border-box}
@@ -85,9 +74,6 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 }
 .icon-btn:hover{background:var(--panel2)}
 .icon-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-/* 深色时显示「太阳」（点了切浅色），浅色时显示「月亮」 */
-body:not(.light) .i-moon{display:none}
-body.light .i-sun{display:none}
 
 /* ---------- 顶部导航 ---------- */
 .nav{
@@ -142,9 +128,9 @@ body.light .i-sun{display:none}
   background:radial-gradient(closest-side,color-mix(in srgb,var(--a2) 22%,transparent),transparent 70%);
 }
 /* 浅色底上深色墨点的浓度要减半，否则整片发绿发红 */
-body.light .glow{background:radial-gradient(closest-side,color-mix(in srgb,var(--a1) 14%,transparent),transparent 72%)}
-body.light .glow::after{background:radial-gradient(closest-side,color-mix(in srgb,var(--a2) 12%,transparent),transparent 70%)}
-body.light .hero-bg::after{opacity:.03}
+.glow{background:radial-gradient(closest-side,color-mix(in srgb,var(--a1) 14%,transparent),transparent 72%)}
+.glow::after{background:radial-gradient(closest-side,color-mix(in srgb,var(--a2) 12%,transparent),transparent 70%)}
+.hero-bg::after{opacity:.03}
 .grid-lines{
   position:absolute;inset:0;opacity:.5;
   background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
@@ -291,7 +277,7 @@ body.light .hero-bg::after{opacity:.03}
 .demo-stage{position:relative;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow-sm);overflow:hidden}
 .stage-tools{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--panel2)}
 .seg{display:inline-flex;flex-wrap:wrap;gap:3px;padding:3px;border-radius:11px;background:var(--bg-soft);border:1px solid var(--line)}
-body.light .seg{background:var(--panel2)}
+.seg{background:var(--panel2)}
 .seg-btn{
   border:0;background:transparent;color:var(--dim);cursor:pointer;font:inherit;font-size:14px;font-weight:600;
   padding:7px 14px;border-radius:8px;transition:.16s;white-space:nowrap;
@@ -316,7 +302,7 @@ body.light .seg{background:var(--panel2)}
 .stage-svg .flow{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:0 99999}
 .stage-svg .node rect{fill:var(--panel2);stroke:var(--line2);stroke-width:1.6;transition:.2s;
   filter:drop-shadow(0 2px 7px rgba(0,0,0,.3))}
-body.light .stage-svg .node rect{filter:drop-shadow(0 2px 6px rgba(31,41,55,.10))}
+.stage-svg .node rect{filter:drop-shadow(0 2px 6px rgba(31,41,55,.10))}
 .stage-svg .node.proxy rect{stroke:var(--a1);stroke-width:2.2;fill:color-mix(in srgb,var(--a1) 9%,var(--panel2))}
 .stage-svg .nt{fill:var(--fg);font-size:17px;font-weight:600;text-anchor:middle}
 .stage-svg .ns{fill:var(--dim2);font-size:12.6px;text-anchor:middle}
@@ -329,14 +315,14 @@ body.light .stage-svg .node rect{filter:drop-shadow(0 2px 6px rgba(31,41,55,.10)
 .packet-wrap.on{opacity:1}
 #packet{fill:var(--info)}
 #packetCore{fill:#fff}
-body.light #packetCore{fill:#fff}
+#packetCore{fill:#fff}
 
 .cmp{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center;margin:6px 16px 0;padding:13px 15px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--panel2)}
 .cmp[hidden]{display:none}   /* 必须写：上面的 display:grid 会盖掉浏览器默认的 [hidden]{display:none} */
 .cmp-col{display:flex;flex-direction:column;gap:5px}
 .cmp-k{font-size:12px;color:var(--dim2)}
 .cmp-v{font-size:13.5px;background:var(--bg-soft);border:1px solid var(--line);border-radius:7px;padding:5px 9px;color:var(--fg2)}
-body.light .cmp-v{background:#fff}
+.cmp-v{background:#fff}
 .cmp-mid{font-size:22px;font-weight:700;color:var(--err);transition:.2s}
 .cmp.matched .cmp-mid{color:var(--ok)}
 .cmp-note{grid-column:1/-1;margin:2px 0 0;font-size:13px;color:var(--dim)}
@@ -380,7 +366,7 @@ body.light .cmp-v{background:#fff}
   overflow-y:auto;max-height:280px;background:var(--bg-soft);
   font-family:"Cascadia Code",Consolas,monospace;font-size:12.3px;line-height:1.65;
 }
-body.light .loglist{background:var(--panel2)}
+.loglist{background:var(--panel2)}
 .logline{display:flex;gap:8px;align-items:baseline;color:var(--fg2);animation:slidein .28s ease}
 @media (prefers-reduced-motion:reduce){ .logline{animation:none} }
 @keyframes slidein{from{opacity:.35;transform:translateX(-6px)}to{opacity:1;transform:none}}
@@ -442,7 +428,7 @@ body.light .loglist{background:var(--panel2)}
   box-shadow:0 14px 34px rgba(0,0,0,.36);
 }
 .feat:hover::before{opacity:1}
-body.light .feat:hover{box-shadow:0 14px 30px rgba(23,35,58,.13)}
+.feat:hover{box-shadow:0 14px 30px rgba(23,35,58,.13)}
 .feat-ic{
   display:grid;place-items:center;width:40px;height:40px;border-radius:12px;margin-bottom:14px;
   background:linear-gradient(135deg,color-mix(in srgb,var(--a1) 16%,transparent),color-mix(in srgb,var(--a2) 18%,transparent));
@@ -452,7 +438,7 @@ body.light .feat:hover{box-shadow:0 14px 30px rgba(23,35,58,.13)}
 .feat h3{margin:0 0 8px;font-size:16.5px}
 .feat p{margin:0;font-size:14.3px;color:var(--dim)}
 .feat code{background:var(--bg-soft);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--fg2)}
-body.light .feat code{background:var(--panel2)}
+.feat code{background:var(--panel2)}
 
 .deep{margin-top:24px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden}
 .deep summary{padding:15px 19px;cursor:pointer;font-weight:600;font-size:15px;list-style:none;display:flex;align-items:center;gap:9px}
@@ -466,7 +452,7 @@ body.light .feat code{background:var(--panel2)}
 .deep-body{padding:2px 21px 20px;border-top:1px solid var(--line);color:var(--dim);font-size:14.6px}
 .deep-body p{margin:15px 0 0}
 .deep-body code{background:var(--bg-soft);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--fg2)}
-body.light .deep-body code{background:var(--panel2)}
+.deep-body code{background:var(--panel2)}
 
 /* ---------- 缓存布局解释器 ---------- */
 .explorer{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow-sm);overflow:hidden}
@@ -477,7 +463,7 @@ body.light .deep-body code{background:var(--panel2)}
   background:var(--bg-soft);color:var(--fg);font-family:"Cascadia Code",Consolas,monospace;font-size:13.6px;
   transition:.18s;
 }
-body.light #urlInput{background:#fff}
+#urlInput{background:#fff}
 #urlInput:focus{outline:none;border-color:var(--a1);box-shadow:0 0 0 3px color-mix(in srgb,var(--a1) 24%,transparent)}
 .exp-presets{display:flex;flex-wrap:wrap;gap:8px;padding:13px 20px 18px}
 .chip{
@@ -504,14 +490,14 @@ body.light #urlInput{background:#fff}
   display:inline-block;max-width:100%;overflow-wrap:anywhere;
   background:var(--bg-soft);border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:13px;color:var(--fg2);
 }
-body.light .exp-row code{background:var(--panel2)}
+.exp-row code{background:var(--panel2)}
 .exp-row code.muted{color:var(--dim2)}
 .exp-json{position:relative;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--bg-soft)}
 .exp-json::before{
   content:"";position:absolute;left:0;right:0;top:0;height:2px;opacity:.8;
   background:linear-gradient(90deg,var(--a1),var(--a2) 55%,transparent);
 }
-body.light .exp-json{background:var(--panel2)}
+.exp-json{background:var(--panel2)}
 .exp-json-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--dim)}
 .mini{border:1px solid var(--line2);background:var(--panel);color:var(--fg2);border-radius:7px;font:inherit;font-size:12px;padding:3px 10px;cursor:pointer;transition:.16s}
 .mini:hover{background:var(--panel2);color:var(--fg);border-color:var(--a1)}
@@ -576,14 +562,11 @@ body.light .exp-json{background:var(--panel2)}
 /* 全页细颗粒：一层固定的噪点，给大片纯色一点"纸感"。pointer-events:none 保证不影响操作 */
 body::after{
   content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;
-  opacity:.03;mix-blend-mode:overlay;
+  opacity:.038;mix-blend-mode:multiply;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-body.light::after{opacity:.038;mix-blend-mode:multiply}
 
 /* 卡片受光面：顶边一道 1px 亮线，让"卡片"看起来有厚度 */
-:root{--inner:inset 0 1px 0 rgba(255,255,255,.055)}
-body.light{--inner:inset 0 1px 0 rgba(255,255,255,.9)}
 .feat,.step,.panel,.explorer,.acc,.deep,.demo-stage,.cache-card{box-shadow:var(--inner),var(--shadow-sm)}
 .feat:hover,.step:hover{box-shadow:var(--inner),var(--shadow)}
 .btn:not(.primary){box-shadow:var(--inner)}
@@ -619,13 +602,13 @@ main{counter-reset:sec}
   content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   box-shadow:inset 0 0 64px rgba(0,0,0,.3);
 }
-body.light .demo-stage::after{box-shadow:inset 0 0 54px rgba(23,35,58,.05)}
+.demo-stage::after{box-shadow:inset 0 0 54px rgba(23,35,58,.05)}
 
 /* 输入框压一点内阴影；代码块加点内凹感 */
 #urlInput{box-shadow:inset 0 1px 3px rgba(0,0,0,.22)}
-body.light #urlInput{box-shadow:inset 0 1px 3px rgba(23,35,58,.05)}
+#urlInput{box-shadow:inset 0 1px 3px rgba(23,35,58,.05)}
 .exp-json .code{box-shadow:inset 0 1px 8px rgba(0,0,0,.16)}
-body.light .exp-json .code{box-shadow:inset 0 1px 6px rgba(23,35,58,.04)}
+.exp-json .code{box-shadow:inset 0 1px 6px rgba(23,35,58,.04)}
 
 /* 页脚底部一团辉光，收尾不显得空 */
 .foot{overflow:hidden}

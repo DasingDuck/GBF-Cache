@@ -1,7 +1,7 @@
 /* ==========================================================================
    碧蓝幻想本地缓存程序 · 站点交互脚本
    零依赖原生 JS。三块功能：
-     1) 主题 / 导航 / 滚动进场 / 版本号与仓库链接
+     1) 导航 / 滚动进场 / 版本号与仓库链接
      2) 请求演示（沿路径动画 + 五个计数器 + 实时日志）
      3) 缓存布局解释器（输入 URL → 判定会不会缓存 + 磁盘路径 + .ext 元数据）
    站点要如实反映程序机制：判定规则与 plugin/server.js 里的一致
@@ -48,20 +48,7 @@
     }
   });
 
-  /* ======================== 2. 主题 / 导航 / 进场 ======================== */
-
-  var THEME_KEY = 'gbf-site-theme';
-  function applyTheme(light) {
-    document.body.classList.toggle('light', !!light);
-    try { localStorage.setItem(THEME_KEY, light ? 'light' : 'dark'); } catch (e) { /* 隐私模式 */ }
-  }
-  var saved = null;
-  try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* 忽略 */ }
-  if (saved) applyTheme(saved === 'light');
-  else applyTheme(window.matchMedia('(prefers-color-scheme: light)').matches);
-  $('#themeBtn').addEventListener('click', function () {
-    applyTheme(!document.body.classList.contains('light'));
-  });
+  /* ======================== 2. 导航 / 进场 ======================== */
 
   var nav = $('#nav');
   var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 8); };
