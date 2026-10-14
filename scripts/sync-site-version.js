@@ -22,6 +22,11 @@ const fs = require('fs');
 const path = require('path');
 
 const REPO_NAME = 'GBF-Cache';
+
+// 改版 SkyLeap（Android）的 apk 下载地址。它属于另一个项目，先留空：
+// 留空时页面上的按钮显示为不可点、提示「下载地址即将提供」；填上后重新跑本脚本即可生效。
+// 例：'https://github.com/你的用户名/某个仓库/releases/latest'
+const SKYLEAP_URL = '';
 const ROOT = path.resolve(__dirname, '..');
 const SERVER_JS = path.join(ROOT, 'plugin', 'server.js');
 const OUT_JS = path.join(ROOT, 'docs', 'assets', 'version.js');
@@ -48,7 +53,7 @@ function render(version) {
     '/* 本文件由 scripts/sync-site-version.js 生成，不要手工改。',
     '   版本号的唯一来源是 plugin/server.js 顶部的 const VERSION。',
     '   改完程序后跑一次：node scripts/sync-site-version.js */',
-    `window.GBF_SITE = { version: "${version}", repo: "${REPO_NAME}" };`,
+    `window.GBF_SITE = { version: "${version}", repo: "${REPO_NAME}", skyleap: "${SKYLEAP_URL}" };`,
     ''
   ].join('\n');
 }

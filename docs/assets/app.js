@@ -34,15 +34,19 @@
   var LINKS = {
     repo: BASE,
     releases: BASE ? BASE + '/releases/latest' : '',
-    issues: BASE ? BASE + '/issues' : ''
+    issues: BASE ? BASE + '/issues' : '',
+    // 改版 SkyLeap 的 apk：地址在另一个项目里，由 version.js 提供（见 sync-site-version.js 顶部常量）
+    skyleap: SITE.skyleap || ''
   };
+  var OFF_TIP = { skyleap: '下载地址即将提供' };
   $$('[data-link]').forEach(function (a) {
-    var url = LINKS[a.getAttribute('data-link')];
+    var key = a.getAttribute('data-link');
+    var url = LINKS[key];
     if (url) { a.href = url; a.target = '_blank'; }
     else {
       a.href = '#';
       a.setAttribute('aria-disabled', 'true');
-      a.title = '部署到 GitHub Pages 后自动生效';
+      a.title = OFF_TIP[key] || '部署到 GitHub Pages 后自动生效';
       a.classList.add('link-off');
       a.addEventListener('click', function (e) { e.preventDefault(); });
     }
