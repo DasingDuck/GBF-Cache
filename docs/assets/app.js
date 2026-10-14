@@ -52,7 +52,7 @@
 
   var THEME_KEY = 'gbf-site-theme';
   function applyTheme(light) {
-    document.body.classList.toggle('light', !!light);
+    document.body.classList.toggle('dark', !light);   // :root = 图纸（默认），.dark = 黑板线稿
     try { localStorage.setItem(THEME_KEY, light ? 'light' : 'dark'); } catch (e) { /* 隐私模式 */ }
   }
   var saved = null;
@@ -60,7 +60,7 @@
   if (saved) applyTheme(saved === 'light');
   else applyTheme(window.matchMedia('(prefers-color-scheme: light)').matches);
   $('#themeBtn').addEventListener('click', function () {
-    applyTheme(!document.body.classList.contains('light'));
+    applyTheme(document.body.classList.contains('dark'));   // 当前是黑板就切回图纸，反之亦然
   });
 
   var nav = $('#nav');

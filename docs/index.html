@@ -47,7 +47,6 @@
 <section class="hero" id="top">
   <div class="hero-bg" aria-hidden="true">
     <div class="glow"></div>
-    <div class="grid-lines"></div>
   </div>
   <div class="wrap hero-inner">
     <div class="hero-copy">
@@ -79,8 +78,7 @@
         <div class="stack-back a"></div>
         <div class="stack-back b"></div>
         <div class="cache-card">
-          <div class="cc-sheen"></div>
-          <div class="cc-top">
+              <div class="cc-top">
             <span class="cc-icon">
               <span class="cc-ring"></span>
               <img src="assets/icon.png" alt="" width="66" height="66">
@@ -201,22 +199,31 @@
 
           <!-- 节点 -->
           <g class="node" id="n_browser">
-            <rect x="16" y="148" width="150" height="64" rx="14"/>
+            <rect x="16" y="148" width="150" height="64" rx="2"/>
             <text class="nt" x="91" y="176">浏览器</text>
             <text class="ns" x="91" y="194">游戏页面</text>
           </g>
           <g class="node proxy" id="n_proxy">
-            <rect x="272" y="148" width="156" height="64" rx="14"/>
+            <rect x="272" y="148" width="156" height="64" rx="2"/>
             <text class="nt" x="350" y="176">本程序</text>
             <text class="ns" x="350" y="194">127.0.0.1:8899</text>
           </g>
+
+          <!-- 选中框：把「本程序」当成在设计稿里被选中的那个对象（虚线框 + 四角手柄） -->
+          <g class="selector" aria-hidden="true">
+            <rect x="264" y="140" width="172" height="80"/>
+            <rect class="h" x="260" y="136" width="8" height="8"/>
+            <rect class="h" x="432" y="136" width="8" height="8"/>
+            <rect class="h" x="260" y="216" width="8" height="8"/>
+            <rect class="h" x="432" y="216" width="8" height="8"/>
+          </g>
           <g class="node" id="n_cache">
-            <rect x="548" y="28" width="156" height="64" rx="14"/>
+            <rect x="548" y="28" width="156" height="64" rx="2"/>
             <text class="nt" x="626" y="56">本地缓存</text>
             <text class="ns" x="626" y="74">硬盘上的文件</text>
           </g>
           <g class="node" id="n_origin">
-            <rect x="548" y="268" width="156" height="64" rx="14"/>
+            <rect x="548" y="268" width="156" height="64" rx="2"/>
             <text class="nt" x="626" y="296">源站</text>
             <text class="ns" x="626" y="314">游戏服务器 / CDN</text>
           </g>
