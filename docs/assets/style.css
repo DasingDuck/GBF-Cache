@@ -274,11 +274,11 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
   min-height:clamp(660px, calc(100vh - 160px), 740px);
 }
 .g-panel{display:none}
-/* 面板统一高度（由 JS 按最高的一页钉在容器 min-height 上）。
-   内容比固定的高度短时垂直居中，留白看起来是排版有意为之，而不是"没写完"。
-   align-content:center 在内容超出时不会裁切（容器会自然变高）。 */
+/* 面板统一高度、内容一律顶格：所有页的第一行都落在同一个位置，
+   切换时不会忽上忽下（之前用垂直居中，短页居中、长页顶格，看着像在乱跑）。
+   内容超出固定高度时容器自然变高，不会裁切。 */
 .g-panel.is-active{
-  display:grid;align-content:center;min-height:inherit;
+  display:grid;align-content:start;min-height:inherit;
   animation:panelIn .36s cubic-bezier(.2,.7,.3,1);
 }
 /* 起手只压到 25% 不透明度：万一动画被打断，内容仍看得见 */
@@ -552,6 +552,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .disc-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
 .disc-head .ic{width:24px;height:24px;fill:none;stroke:var(--err);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .disc-head h2{margin:0;font-size:21px}
+.disc-note{margin:0;font:600 13.4px/1.4 var(--sans);color:var(--ink-2)}
 .disc-list{margin:0;padding-left:22px;display:grid;gap:12px}
 .disc-list li{font-size:14.5px;color:var(--dim)}
 .disc-list b{color:var(--fg2)}
