@@ -236,9 +236,15 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .g-item.is-active .g-label{font-size:16.5px;font-weight:700}
 @media (prefers-reduced-motion:reduce){ .g-dot,.g-label{transition:none} }
 
-.guide-panels{min-width:0}
+.guide-panels{min-width:0;position:relative}   /* 高度由 JS 统一成最高那一页：切换时不再跳动 */
 .g-panel{display:none}
-.g-panel.is-active{display:block;animation:panelIn .36s cubic-bezier(.2,.7,.3,1)}
+/* 面板统一高度（由 JS 按最高的一页钉在容器 min-height 上）。
+   内容比固定的高度短时垂直居中，留白看起来是排版有意为之，而不是"没写完"。
+   align-content:center 在内容超出时不会裁切（容器会自然变高）。 */
+.g-panel.is-active{
+  display:grid;align-content:center;min-height:inherit;
+  animation:panelIn .36s cubic-bezier(.2,.7,.3,1);
+}
 /* 起手只压到 25% 不透明度：万一动画被打断，内容仍看得见 */
 @keyframes panelIn{from{opacity:.25;transform:translateY(12px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){ .g-panel.is-active{animation:none} }
