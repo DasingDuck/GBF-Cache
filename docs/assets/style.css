@@ -278,9 +278,25 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
    切换时不会忽上忽下（之前用垂直居中，短页居中、长页顶格，看着像在乱跑）。
    内容超出固定高度时容器自然变高，不会裁切。 */
 .g-panel.is-active{
-  display:grid;align-content:start;min-height:inherit;
+  display:flex;flex-direction:column;min-height:inherit;
   animation:panelIn .36s cubic-bezier(.2,.7,.3,1);
 }
+/* 内容块吃掉剩余高度：顶格对齐之后，空白不该全堆在下面 */
+.guide .steps,.guide .feat-grid,.guide .acc,.guide .disc{flex:1}
+/* 演示页：让右栏（计数器 + 日志）撑满，多出来的高度给日志列表，
+   左侧流程图保持自己的比例，不去硬拉伸 */
+.guide .demo{flex:1;align-items:start}
+.guide .demo-side{align-self:stretch}
+.guide .panel.grow{flex:1;min-height:0}
+.guide .loglist{max-height:none;flex:1}
+/* 再在各自内部把多出来的高度分掉，而不是留一坨空白 */
+/* 卡片被撑高后，内容在卡片内居中 —— 试过"编号贴顶、文字贴底"，
+   那样中间会挖出一大块空，反而更像没写完 */
+.guide .step{display:flex;flex-direction:column;justify-content:center}
+.guide .acc{display:flex;flex-direction:column}
+.guide .acc details{flex:1;display:flex;flex-direction:column;justify-content:center}
+.guide .disc{display:flex;flex-direction:column}
+.guide .disc-list{flex:1;align-content:space-between}
 /* 起手只压到 25% 不透明度：万一动画被打断，内容仍看得见 */
 @keyframes panelIn{from{opacity:.25;transform:translateY(12px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){ .g-panel.is-active{animation:none} }
