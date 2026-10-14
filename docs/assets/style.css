@@ -122,12 +122,12 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
   position:relative;overflow:hidden;
   min-height:calc(100vh - 64px);
   min-height:calc(100svh - 64px);
-  display:flex;flex-direction:column;justify-content:center;
-  padding:44px 0;
+  display:flex;flex-direction:column;
+  padding:44px 0 0;          /* 底部不留白：统计条正好压在分界线上 */
   border-bottom:1px solid var(--line);
   background-color:rgba(255,255,255,.42);   /* 首屏遮罩最浅：让底图在第一节最清楚 */
 }
-.hero-inner{width:100%}
+.hero-inner{width:100%;flex:1;align-content:center}   /* 撑开剩余高度，内容在其中垂直居中 */
 .hero-bg{position:absolute;inset:0;pointer-events:none}
 .hero-bg::after{                     /* 细颗粒，压掉大面积纯色的塑料感 */
   content:"";position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;
@@ -338,8 +338,8 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .sec-sub code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
 
 /* ---------- 规格条 ---------- */
-.specband{border-bottom:1px solid var(--line);background-color:rgba(255,255,255,.58)}
-.specs{list-style:none;margin:0;padding:32px 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.specband{background-color:transparent;border-top:1px solid var(--line);border-bottom:0}
+.specs{list-style:none;margin:0;padding:26px 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
 .specs li{padding:4px 26px;border-left:1px solid var(--line)}
 .specs li:first-child{border-left:0;padding-left:0}
 .specs b{
