@@ -26,9 +26,8 @@
     </a>
     <nav class="nav-links" aria-label="页面导航">
       <a href="#demo">请求演示</a>
-      <a href="#how">使用步骤</a>
+      <a href="#how">安装使用</a>
       <a href="#features">特性</a>
-      <a href="#layout">缓存布局</a>
       <a href="#faq">常见问题</a>
     </nav>
     <div class="nav-actions">
@@ -146,9 +145,8 @@
     <nav class="guide-nav" aria-label="工作讲解目录">
       <ul>
           <li><button type="button" class="g-item is-active" data-panel="demo" aria-selected="true"><i class="g-dot" aria-hidden="true"></i><span class="g-label">请求演示</span></button></li>
-          <li><button type="button" class="g-item" data-panel="how" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">上手</span></button></li>
+          <li><button type="button" class="g-item" data-panel="how" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">安装使用</span></button></li>
           <li><button type="button" class="g-item" data-panel="features" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">特性</span></button></li>
-          <li><button type="button" class="g-item" data-panel="layout" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">缓存布局</span></button></li>
           <li><button type="button" class="g-item" data-panel="faq" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">常见问题</span></button></li>
           <li><button type="button" class="g-item" data-panel="disclaimer" aria-selected="false"><i class="g-dot" aria-hidden="true"></i><span class="g-label">免责声明</span></button></li>
       </ul>
@@ -277,7 +275,7 @@
         </article>
         <article class="g-panel" id="how" data-panel="how">
     <div class="sec-head">
-      <p class="sec-kicker" data-fig="02">上手</p>
+      <p class="sec-kicker" data-fig="02">安装使用</p>
       <h2>三步就能用</h2>
       <p class="sec-sub">不需要装运行库，不需要浏览器插件，也不改动游戏本身。</p>
     </div>
@@ -353,49 +351,9 @@
       </div>
     </details>
         </article>
-        <article class="g-panel" id="layout" data-panel="layout">
-    <div class="sec-head">
-      <p class="sec-kicker" data-fig="04">动手试试</p>
-      <h2>这条 URL 会被怎么处理</h2>
-      <p class="sec-sub">改一改下面的地址，看它落在磁盘哪里、元数据长什么样、会不会被缓存。</p>
-    </div>
-
-    <div class="explorer">
-      <div class="exp-input">
-        <label for="urlInput">资源地址</label>
-        <input id="urlInput" type="text" spellcheck="false" autocomplete="off"
-               value="https://prd-game-a-granbluefantasy.akamaized.net/assets/1789531866/img/sp/ui/btn_ability.png?1729002592">
-      </div>
-      <div class="exp-presets" role="group" aria-label="示例地址">
-        <button type="button" class="chip" data-url="https://prd-game-a-granbluefantasy.akamaized.net/assets/1789531866/img/sp/ui/btn_ability.png?1729002592">图片（CDN）</button>
-        <button type="button" class="chip" data-url="https://game.granbluefantasy.jp/assets/1789531866/js/main.js?1729002592">脚本（本域）</button>
-        <button type="button" class="chip" data-url="https://game.granbluefantasy.jp/assets_en/1789531866/img/sp/ui/btn_ability.png">英语素材</button>
-        <button type="button" class="chip" data-url="https://game.granbluefantasy.jp/assets/1789531866/voice/1/1001_a_1.m4a">语音</button>
-        <button type="button" class="chip" data-url="https://game.granbluefantasy.jp/rest/user/status">接口（直连）</button>
-        <button type="button" class="chip" data-url="https://example.com/assets/a.png">其它站点（直连）</button>
-      </div>
-
-      <div class="exp-out" id="expOut">
-        <div class="verdict" id="verdict">
-          <span class="vbadge" id="verdictBadge">缓存</span>
-          <span class="vtext" id="verdictText"></span>
-        </div>
-        <dl class="exp-rows">
-          <div class="exp-row"><dt>缓存键</dt><dd><code id="outKey">—</code></dd></div>
-          <div class="exp-row"><dt>磁盘位置</dt><dd><code id="outPath">—</code></dd></div>
-          <div class="exp-row"><dt>元数据</dt><dd><code id="outExt">—</code></dd></div>
-        </dl>
-        <div class="exp-json">
-          <div class="exp-json-head"><span id="jsonTitle">.ext 内容</span><button class="mini" id="copyJson" type="button">复制</button></div>
-          <pre id="jsonOut" class="code">—</pre>
-        </div>
-      </div>
-      <ul class="exp-why" id="whyList"></ul>
-    </div>
-        </article>
         <article class="g-panel" id="faq" data-panel="faq">
     <div class="sec-head">
-      <p class="sec-kicker" data-fig="05">常见问题</p>
+      <p class="sec-kicker" data-fig="04">常见问题</p>
       <h2>你可能想问的</h2>
     </div>
     <div class="acc-cols">
