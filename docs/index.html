@@ -41,16 +41,22 @@
   </div>
 </header>
 
-<!-- 手绘描边滤镜：只给"框架"那一层用（对 ::before 的边框做位移 + 压力不均），
-     框里的文字与图表完全不受影响。Safari 不支持对 HTML 元素用 SVG 滤镜时会退化成直线框。 -->
+<!-- 铅笔线条滤镜：只作用于"框架线"那一层 —— 纸纹吃墨的颗粒感 + 石墨粉末边缘。
+     不位移、不抖线（线是直的，质感是颗粒的）。框里的文字与图表完全不受影响。
+     滤镜不被支持时（旧 Safari）退化成普通实线，不影响阅读。 -->
 <svg class="svg-defs" width="0" height="0" aria-hidden="true" focusable="false">
-  <filter id="pencil" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
-    <feTurbulence type="fractalNoise" baseFrequency="0.18" numOctaves="2" seed="3" result="press"/>
-    <feColorMatrix in="press" type="matrix"
-      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .3 .7" result="pressA"/>
-    <feComposite in="SourceGraphic" in2="pressA" operator="in" result="inked"/>
-    <feTurbulence type="fractalNoise" baseFrequency="0.028" numOctaves="4" seed="11" result="wob"/>
-    <feDisplacementMap in="inked" in2="wob" scale="3.2" xChannelSelector="R" yChannelSelector="G"/>
+  <filter id="pencil" x="-14%" y="-14%" width="128%" height="128%" color-interpolation-filters="sRGB">
+    <!-- 纸纹吃墨：细颗粒调制不透明度，线条深浅不匀、有砂感 -->
+    <feTurbulence type="fractalNoise" baseFrequency="0.32" numOctaves="3" seed="8" result="grain"/>
+    <feColorMatrix in="grain" type="matrix"
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .86 .14" result="grainA"/>
+    <feComposite in="SourceGraphic" in2="grainA" operator="in" result="textured"/>
+    <!-- 石墨粉：一层很淡的模糊叠回去，线边不再"干干净净" -->
+    <feGaussianBlur in="textured" stdDeviation="0.7" result="dust"/>
+    <feMerge>
+      <feMergeNode in="dust"/>
+      <feMergeNode in="textured"/>
+    </feMerge>
   </filter>
 </svg>
 
