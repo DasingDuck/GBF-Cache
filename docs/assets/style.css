@@ -702,8 +702,10 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
     linear-gradient(180deg,transparent 0,var(--stroke) calc(var(--fade) * .65),var(--stroke) calc(100% - var(--fade)),transparent 100%),
     linear-gradient(180deg,transparent 0,var(--stroke) calc(var(--fade) * .65),var(--stroke) calc(100% - var(--fade)),transparent 100%);
   background-size:100% var(--lw),100% var(--lw),var(--lw) 100%,var(--lw) 100%;
-  background-position:left calc(var(--over) + var(--bw)),left calc(100% - var(--over) - var(--bw)),
-                      calc(var(--over) + var(--bw)) top,calc(100% - var(--over) - var(--bw)) top;
+  /* 只补偿 inset 就够：伪元素盒已扩到边框外沿，线放在 --over 处正好压在边上。
+     （这里若再加一次 --bw，线会缩进 1px，外沿和线之间就露出一条缝 —— 之前就是这个毛病） */
+  background-position:left var(--over),left calc(100% - var(--over)),
+                      var(--over) top,calc(100% - var(--over)) top;
   background-repeat:no-repeat;
 }
 /* 输入框不支持 ::before，单独给它一条（直线、不上颗粒） */
