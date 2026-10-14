@@ -72,7 +72,7 @@
   // （animation-timeline: view()）完成 —— 见 style.css 那段的说明。
   // 之前是 JS + IntersectionObserver 的写法，一旦回调被节流，内容会卡在 opacity:0 的隐藏态；
   // 纯 CSS 方案没有这个失败模式：不支持的浏览器干脆没有动画，但内容始终可见。
-  $$('.sec-head, .demo, .step, .note-card, .feat, .deep, .explorer, .shot, .acc, .disc, .specs li')
+  $$('.sec-head, .demo, .step, .note-card, .feat, .deep, .explorer, .acc, .disc, .specs li')
     .forEach(function (el) { el.classList.add('reveal'); });
 
   /* ======================== 3. 请求演示 ======================== */

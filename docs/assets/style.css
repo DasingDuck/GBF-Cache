@@ -219,8 +219,6 @@ body.light .hero-bg::after{opacity:.03}
 .cc-foot b{color:var(--fg2)}
 @media (prefers-reduced-motion:reduce){ .cc-ring{animation:none;opacity:.7} }
 
-.art-dot{width:9px;height:9px;border-radius:50%}
-.art-dot.r{background:#ff5f57}.art-dot.y{background:#febc2e}.art-dot.g{background:#28c840}
 
 /* ---------- 区块外壳 ---------- */
 .sec{padding:86px 0;border-bottom:1px solid var(--line)}
@@ -230,9 +228,11 @@ body.light .hero-bg::after{opacity:.03}
   margin:0 0 14px;font-size:12.5px;font-weight:700;letter-spacing:.17em;text-transform:uppercase;
   background:linear-gradient(90deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent;
 }
-.sec-kicker::before{
-  content:"";display:inline-block;width:26px;height:2px;border-radius:2px;vertical-align:middle;
-  margin:0 10px 3px 0;background:linear-gradient(90deg,var(--a1),var(--a2));
+.sec-kicker::before{                 /* 分节编号（01…05，按文档顺序自动编号） */
+  content:counter(sec,decimal-leading-zero);
+  display:inline-block;vertical-align:middle;margin:0 11px 1px 0;padding-right:11px;
+  border-right:1px solid var(--line2);color:var(--dim2);
+  font-family:"Cascadia Code",Consolas,monospace;font-size:11.5px;letter-spacing:0;
 }
 .sec-head h2{font-size:clamp(24px,3.1vw,35px);margin:0 0 15px;font-weight:700;letter-spacing:-.02em}
 .sec-sub{margin:0;color:var(--dim);font-size:15.5px}
@@ -510,13 +510,6 @@ body.light .exp-json{background:var(--panel2)}
 .exp-why li::before{content:"";position:absolute;left:6px;top:11px;width:6px;height:6px;border-radius:50%;background:var(--a2)}
 .exp-why b{color:var(--fg2);font-weight:600}
 
-/* ---------- 控制台截图 ---------- */
-.shot{margin:0}
-.shot-frame{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel);box-shadow:var(--shadow)}
-.shot-bar{display:flex;align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel2)}
-.shot-bar em{font-style:normal;font-size:12px;color:var(--dim2);margin-left:5px}
-.shot-frame img{display:block;width:100%}
-.shot figcaption{margin-top:14px;font-size:13.4px;color:var(--dim2);text-align:center}
 
 /* ---------- 常见问题 ---------- */
 .acc{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden}
@@ -558,6 +551,85 @@ body.light .exp-json{background:var(--panel2)}
 .foot-links{display:flex;flex-wrap:wrap;gap:10px 20px;font-size:14.2px}
 .foot-links a{color:var(--fg2)}
 .foot-note{margin:0;font-size:12.8px;color:var(--dim2)}
+
+/* ==========================================================================
+   质感层（第二轮美术）：细颗粒 / 内高光 / 分节编号 / 光晕呼吸 / 原生控件
+   刻意放在样式表靠后 —— 这里要覆盖前面各组件的阴影与标题装饰
+   ========================================================================== */
+
+/* 全页细颗粒：一层固定的噪点，给大片纯色一点"纸感"。pointer-events:none 保证不影响操作 */
+body::after{
+  content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;
+  opacity:.03;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+body.light::after{opacity:.038;mix-blend-mode:multiply}
+
+/* 卡片受光面：顶边一道 1px 亮线，让"卡片"看起来有厚度 */
+:root{--inner:inset 0 1px 0 rgba(255,255,255,.055)}
+body.light{--inner:inset 0 1px 0 rgba(255,255,255,.9)}
+.feat,.step,.panel,.explorer,.acc,.deep,.demo-stage,.cache-card{box-shadow:var(--inner),var(--shadow-sm)}
+.feat:hover,.step:hover{box-shadow:var(--inner),var(--shadow)}
+.btn:not(.primary){box-shadow:var(--inner)}
+
+/* 分节计数：main 里每个 .sec 自增，标题前缀用它 */
+main{counter-reset:sec}
+.sec{counter-increment:sec}
+
+/* 浅色区块的上边缘加一道渐隐发丝线，分隔更干净 */
+.sec.alt{position:relative}
+.sec.alt::before{
+  content:"";position:absolute;left:0;right:0;top:0;height:1px;opacity:.6;
+  background:linear-gradient(90deg,transparent,var(--line2) 20%,var(--line2) 80%,transparent);
+}
+
+/* 首屏光斑缓慢漂移（幅度很小，只是让静止画面有呼吸感） */
+@keyframes drift{
+  0%,100%{transform:translate3d(0,0,0) scale(1)}
+  50%{transform:translate3d(26px,20px,0) scale(1.07)}
+}
+.g1{animation:drift 30s ease-in-out infinite}
+.g2{animation:drift 38s ease-in-out infinite reverse}
+.g3{animation:drift 46s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){ .glow{animation:none} }
+
+/* 顶栏滚起来后，底边浮出一道渐变发丝线 */
+.nav::after{
+  content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;opacity:0;transition:opacity .3s;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--a2) 52%,transparent) 50%,transparent);
+}
+.nav.scrolled::after{opacity:1}
+
+/* 演示台四周压一圈内阴影，像嵌进面板里 */
+.demo-stage::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  box-shadow:inset 0 0 64px rgba(0,0,0,.3);
+}
+body.light .demo-stage::after{box-shadow:inset 0 0 54px rgba(23,35,58,.05)}
+
+/* 输入框压一点内阴影；代码块加点内凹感 */
+#urlInput{box-shadow:inset 0 1px 3px rgba(0,0,0,.22)}
+body.light #urlInput{box-shadow:inset 0 1px 3px rgba(23,35,58,.05)}
+.exp-json .code{box-shadow:inset 0 1px 8px rgba(0,0,0,.16)}
+body.light .exp-json .code{box-shadow:inset 0 1px 6px rgba(23,35,58,.04)}
+
+/* 页脚底部一团辉光，收尾不显得空 */
+.foot{overflow:hidden}
+.foot::after{
+  content:"";position:absolute;left:50%;bottom:-170px;width:680px;height:330px;transform:translateX(-50%);
+  pointer-events:none;
+  background:radial-gradient(closest-side,color-mix(in srgb,var(--a2) 22%,transparent),transparent);
+}
+
+/* 标题断行更好看一些；滚动条与选区跟着主题走 */
+h1,h2,h3{text-wrap:balance}
+.sec-head h2{letter-spacing:-.022em}
+::selection{background:color-mix(in srgb,var(--a2) 44%,transparent);color:var(--fg)}
+html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line2);border:3px solid var(--bg);border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
 
 /* ---------- 滚动进场 ----------
    用纯 CSS 的滚动驱动动画（animation-timeline: view()）而不是 JS + IntersectionObserver。
