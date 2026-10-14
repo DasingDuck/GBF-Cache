@@ -14,13 +14,16 @@
   --fg:#111418; --fg2:#272c33; --dim:#565d68; --dim2:#6d747e;
   /* 状态语义五色：与控制台（dashboard.html）五个计数器一一对应 */
   --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#0969da; --store:#8250df;
-  /* 品牌双色：春日青 → 粉红。两者色相相差 160° 以上，渐变有明确的走向；
-     刻意避开蓝紫（AI 默认配色），也避开"两个暗冷色"那种混出来发灰的组合。 */
-  --a1:#2fa98f;   /* 春日青：偏青的嫩绿 */ 
-  --a2:#e04a8f;   /* 粉红 */
-  --hi:color-mix(in srgb,var(--a2) 30%,var(--line2));   /* 悬停边框 */
-  /* 两端平滑过渡（不夹"两段实色 + 窄接缝"那套） */
+  /* 品牌双色（指定值）：浅青 #c8fffc → 浅蓝 #95bdff。
+     这两个色很浅，做填充/底色/光晕很好看，但做文字在白底上几乎看不见
+     （对比度只有 1.05:1 与 1.9:1），所以文字与细线另用"同色相加深版" --a1-ink/--a2-ink。 */
+  --a1:#c8fffc;      /* 填充用：浅青 */
+  --a2:#95bdff;      /* 填充用：浅蓝 */
+  --a1-ink:#1eb8b1;  /* 文字/细线用：同色相加深 */
+  --a2-ink:#3b82f6;
+  --hi:color-mix(in srgb,var(--a2-ink) 30%,var(--line2));   /* 悬停边框 */
   --brand:linear-gradient(100deg,var(--a1),var(--a2));
+  --brand-ink:linear-gradient(100deg,var(--a1-ink),var(--a2-ink));
   --stroke:rgba(26,29,34,.92);                          /* 框架构造线的墨色 */
   --inner:inset 0 1px 0 rgba(255,255,255,.9);
   --shadow:0 14px 34px rgba(23,35,58,.11);
@@ -56,8 +59,8 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 }
 .btn:hover{background:var(--panel2);border-color:var(--dim2);text-decoration:none;transform:translateY(-1px)}
 .btn.primary{
-  background:var(--brand);border-color:transparent;color:#fff;
-  box-shadow:0 6px 20px color-mix(in srgb,var(--a2) 26%,transparent);
+  background:var(--brand);border-color:transparent;color:var(--fg);
+  box-shadow:0 6px 18px color-mix(in srgb,var(--a2-ink) 22%,transparent);
 }
 .btn.primary:hover{box-shadow:0 9px 24px rgba(0,0,0,.4);filter:brightness(1.09)}
 .btn.primary::after{                    /* 悬停时扫过的一道光 */
@@ -90,7 +93,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .brand:hover{text-decoration:none}
 .brand-logo{
   width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;
-  background:var(--brand);color:#fff;
+  background:var(--brand);color:var(--fg);
   font-size:12px;font-weight:700;letter-spacing:.4px;
 }
 .brand-text{display:flex;flex-direction:column;line-height:1.25}
@@ -118,21 +121,14 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
   content:"";position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-/* 首屏两层品牌光斑：左青绿、右品红。刻意不用蓝紫 —— 那是最像"AI 生成页"的配方；
-   这里换成品红配青绿，浓度也压得低，只做空间感，不做主角。 */
-.glow{
-  position:absolute;left:50%;top:-330px;transform:translateX(-50%);
-  width:1180px;height:660px;border-radius:50%;pointer-events:none;
-  background:radial-gradient(closest-side,color-mix(in srgb,var(--a1) 28%,transparent),transparent 72%);
+/* 首屏底色就是品牌渐变本身（浅青 → 浅蓝）：这两个色很浅，做整片底最合适，
+   再用一层从下往上的遮罩让它自然淡出，不与下面的白色区块硬接。 */
+.hero-bg{
+  background-image:linear-gradient(118deg,var(--a1),var(--a2));
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 54%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 0%,#000 54%,transparent 100%);
+  opacity:.72;
 }
-.glow::after{
-  content:"";position:absolute;inset:-130px -300px;border-radius:50%;
-  background:radial-gradient(closest-side,color-mix(in srgb,var(--a2) 22%,transparent),transparent 70%);
-}
-/* 浅色底上深色墨点的浓度要减半，否则整片发绿发红 */
-.glow{background:radial-gradient(closest-side,color-mix(in srgb,var(--a1) 14%,transparent),transparent 72%)}
-.glow::after{background:radial-gradient(closest-side,color-mix(in srgb,var(--a2) 12%,transparent),transparent 70%)}
-.hero-bg::after{opacity:.03}
 .grid-lines{
   position:absolute;inset:0;opacity:.5;
   background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
@@ -160,7 +156,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 }
 .hero h1{font-size:clamp(30px,4.4vw,50px);margin:0 0 20px;font-weight:700}
 /* 第二行整句走品牌渐变 —— 这是"原本的色彩呈现"里最抓眼的一处 */
-.grad{background:var(--brand);
+.grad{background:var(--brand-ink);
   -webkit-background-clip:text;background-clip:text;color:transparent}
 .lead{font-size:clamp(15.5px,1.6vw,17.5px);color:var(--fg2);max-width:640px;margin:0 0 30px}
 .hero-btns{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:36px}
@@ -189,7 +185,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .cc-top{position:relative;display:flex;align-items:center;gap:14px;padding:18px 18px 16px;border-bottom:1px solid var(--line)}
 .cc-icon{position:relative;width:64px;height:64px;flex:0 0 auto;display:grid;place-items:center}
 .cc-icon img{position:relative;width:56px;height:56px;border-radius:15px;box-shadow:0 8px 22px rgba(31,111,235,.35)}
-.cc-ring{position:absolute;inset:-2px;border-radius:20px;border:1px solid color-mix(in srgb,var(--a2) 48%,transparent);
+.cc-ring{position:absolute;inset:-2px;border-radius:20px;border:1px solid color-mix(in srgb,var(--a2-ink) 42%,transparent);
   animation:ringPulse 3.4s ease-in-out infinite}
 @keyframes ringPulse{0%,100%{transform:scale(.93);opacity:.45}50%{transform:scale(1.09);opacity:.9}}
 .cc-meta{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -235,8 +231,8 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .sec-kicker::before{                 /* 分节编号（01…05，按文档顺序自动编号） */
   content:counter(sec,decimal-leading-zero);
   display:inline-block;vertical-align:middle;margin:0 11px 1px 0;padding-right:11px;
-  border-right:1px solid color-mix(in srgb,var(--a2) 30%,var(--line2));
-  color:var(--a1);   /* 只有 12px，渐变看不出来，直接用春日青 */
+  border-right:1px solid color-mix(in srgb,var(--a2-ink) 28%,var(--line2));
+  color:var(--a1-ink);   /* 只有 12px，渐变看不出来，直接用加深版的浅青 */
   font-family:"Cascadia Code",Consolas,monospace;font-size:11.5px;letter-spacing:0;
 }
 .sec-head h2{font-size:clamp(24px,3.1vw,35px);margin:0 0 15px;font-weight:700;letter-spacing:-.02em}
@@ -253,7 +249,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
   display:block;font-weight:800;line-height:1.08;letter-spacing:-.02em;
   font-size:clamp(28px,3.4vw,40px);font-variant-numeric:tabular-nums;
   /* 数字很窄，横向渐变只会显出一种色 —— 改成竖向：上春日青、下粉红 */
-  background:linear-gradient(180deg,var(--a1),var(--a2));
+  background:linear-gradient(180deg,var(--a1-ink),var(--a2-ink));
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 .specs b small{font-size:.52em;font-weight:700}
@@ -286,9 +282,9 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
   padding:7px 14px;border-radius:8px;transition:.16s;white-space:nowrap;
 }
 .seg-btn:hover{color:var(--fg)}
-.seg-btn.active{background:var(--brand);color:#fff;box-shadow:0 3px 12px color-mix(in srgb,var(--a2) 24%,transparent)}
+.seg-btn.active{background:var(--brand);color:var(--fg);box-shadow:0 3px 12px color-mix(in srgb,var(--a2-ink) 20%,transparent)}
 .auto{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--dim);cursor:pointer;margin-left:auto}
-.auto input{accent-color:var(--a1);width:15px;height:15px;cursor:pointer}
+.auto input{accent-color:var(--a1-ink);width:15px;height:15px;cursor:pointer}
 @media (max-width:560px){
   .seg{width:100%}
   .seg-btn{flex:1 1 auto;text-align:center;padding:7px 8px}
@@ -306,7 +302,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .stage-svg .node rect{fill:var(--panel2);stroke:var(--line2);stroke-width:1.6;transition:.2s;
   filter:drop-shadow(0 2px 7px rgba(0,0,0,.3))}
 .stage-svg .node rect{filter:drop-shadow(0 2px 6px rgba(31,41,55,.10))}
-.stage-svg .node.proxy rect{stroke:var(--a2);stroke-width:2.2;fill:color-mix(in srgb,var(--a2) 8%,var(--panel2))}
+.stage-svg .node.proxy rect{stroke:var(--a2-ink);stroke-width:2.2;fill:color-mix(in srgb,var(--a2-ink) 8%,var(--panel2))}
 .stage-svg .nt{fill:var(--fg);font-size:17px;font-weight:600;text-anchor:middle}
 .stage-svg .ns{fill:var(--dim2);font-size:12.6px;text-anchor:middle}
 .stage-svg .plabel{fill:var(--dim2);font-size:12.4px;text-anchor:middle}
@@ -399,8 +395,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 @media (max-width:900px){ .step::after{display:none} }
 .step-no{
   display:grid;place-items:center;width:36px;height:36px;border-radius:11px;margin-bottom:15px;
-  background:var(--brand);color:#fff;font-weight:700;font-size:15px;
-  box-shadow:0 6px 16px color-mix(in srgb,var(--a2) 26%,transparent);
+  background:var(--brand);color:var(--fg);font-weight:700;font-size:15px;
 }
 .step h3{margin:0 0 9px;font-size:17px}
 .step p{margin:0;font-size:14.5px;color:var(--dim)}
@@ -434,10 +429,10 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .feat:hover{box-shadow:0 14px 30px rgba(23,35,58,.13)}
 .feat-ic{
   display:grid;place-items:center;width:40px;height:40px;border-radius:12px;margin-bottom:14px;
-  background:linear-gradient(135deg,color-mix(in srgb,var(--a1) 16%,transparent),color-mix(in srgb,var(--a2) 18%,transparent));
-  border:1px solid color-mix(in srgb,var(--a2) 26%,transparent);
+  background:linear-gradient(135deg,color-mix(in srgb,var(--a1-ink) 10%,transparent),color-mix(in srgb,var(--a2-ink) 13%,transparent));
+  border:1px solid color-mix(in srgb,var(--a2-ink) 26%,transparent);
 }
-.feat-ic svg{width:20px;height:20px;fill:none;stroke:var(--a2);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.feat-ic svg{width:20px;height:20px;fill:none;stroke:var(--a2-ink);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .feat h3{margin:0 0 8px;font-size:16.5px}
 .feat p{margin:0;font-size:14.3px;color:var(--dim)}
 .feat code{background:var(--bg-soft);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--fg2)}
@@ -467,14 +462,14 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
   transition:.18s;
 }
 #urlInput{background:#fff}
-#urlInput:focus{outline:none;border-color:var(--a1);box-shadow:0 0 0 3px color-mix(in srgb,var(--a1) 24%,transparent)}
+#urlInput:focus{outline:none;border-color:var(--a1-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--a1-ink) 20%,transparent)}
 .exp-presets{display:flex;flex-wrap:wrap;gap:8px;padding:13px 20px 18px}
 .chip{
   border:1px solid var(--line2);background:var(--panel2);color:var(--fg2);cursor:pointer;font:inherit;
   font-size:13px;padding:6px 12px;border-radius:999px;transition:.16s;
 }
-.chip:hover{border-color:var(--a1);color:var(--fg);transform:translateY(-1px)}
-.chip.on{background:var(--brand);color:#fff;border-color:transparent}
+.chip:hover{border-color:var(--a1-ink);color:var(--fg);transform:translateY(-1px)}
+.chip.on{background:var(--brand);color:var(--fg);border-color:transparent}
 
 .exp-out{border-top:1px solid var(--line);padding:20px}
 .verdict{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
@@ -498,12 +493,12 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .exp-json{position:relative;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--bg-soft)}
 .exp-json::before{
   content:"";position:absolute;left:0;right:0;top:0;height:2px;opacity:.8;
-  background:linear-gradient(90deg,var(--a1),var(--a2) 55%,transparent);
+  background:linear-gradient(90deg,var(--a1-ink),var(--a2-ink) 55%,transparent);
 }
 .exp-json{background:var(--panel2)}
 .exp-json-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--dim)}
 .mini{border:1px solid var(--line2);background:var(--panel);color:var(--fg2);border-radius:7px;font:inherit;font-size:12px;padding:3px 10px;cursor:pointer;transition:.16s}
-.mini:hover{background:var(--panel2);color:var(--fg);border-color:var(--a1)}
+.mini:hover{background:var(--panel2);color:var(--fg);border-color:var(--a1-ink)}
 .code{margin:0;padding:14px;font-family:"Cascadia Code",Consolas,monospace;font-size:12.8px;line-height:1.7;overflow-x:auto;color:var(--fg2);white-space:pre}
 .code .k{color:var(--info)}
 .code .s{color:var(--store)}
@@ -586,17 +581,11 @@ main{counter-reset:sec}
 }
 
 /* 首屏光斑缓慢漂移（幅度很小，只是让静止画面有呼吸感） */
-@keyframes drift{
-  0%,100%{transform:translateX(-50%) scale(1)}
-  50%{transform:translateX(-50%) translateY(14px) scale(1.05)}
-}
-.glow{animation:drift 42s ease-in-out infinite}
-@media (prefers-reduced-motion:reduce){ .glow{animation:none} }
 
 /* 顶栏滚起来后，底边浮出一道渐变发丝线 */
 .nav::after{
   content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;opacity:0;transition:opacity .3s;
-  background:linear-gradient(90deg,transparent,var(--a1) 30%,var(--a2) 70%,transparent);
+  background:linear-gradient(90deg,transparent,var(--a1-ink) 30%,var(--a2-ink) 70%,transparent);
 }
 .nav.scrolled::after{opacity:1}
 
@@ -624,7 +613,7 @@ main{counter-reset:sec}
 /* 标题断行更好看一些；滚动条与选区跟着主题走 */
 h1,h2,h3{text-wrap:balance}
 .sec-head h2{letter-spacing:-.022em}
-::selection{background:color-mix(in srgb,var(--a1) 38%,transparent);color:var(--fg)}
+::selection{background:color-mix(in srgb,var(--a1-ink) 30%,transparent);color:var(--fg)}
 html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 ::-webkit-scrollbar{width:11px;height:11px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -710,4 +699,4 @@ html{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
   .specs b{animation:none!important;background-position:0 0}
   .btn:hover,.step:hover,.feat:hover,.chip:hover{transform:none}
 }
-:focus-visible{outline:2px solid var(--a1);outline-offset:3px;border-radius:6px}
+:focus-visible{outline:2px solid var(--a1-ink);outline-offset:3px;border-radius:6px}
