@@ -5,62 +5,118 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>碧蓝幻想本地缓存程序</title>
 <style>
+  /* ═══ 设计令牌（V4.19.0 质感改版：面的层次 / 字 / 语义五色 / 质感四件套）═══
+     ① 面分三层：页面底(--bg) → 卡面(--panel, 顶色 --panel-hi 做竖向渐变) → 卡内嵌面(--inset)。
+        底色比旧版 #0e1116 深了一档，卡片才"浮"得起来（这是这套质感的底座）。
+     ② 语义五色（#3fb950 #d29922 #f85149 #58a6ff #a371f7）与 --panel/#161b22、
+        --line/#262d38、--fg/#e6edf3、--dim/#8b949e 这一组，是与悬浮条 tray.ps1 共用的
+        那 9 个字面值：自测 test-floatwin.js（D8）逐个核对两份文件里都在。
+        要动其中任何一个，两份 tray.ps1 必须同步改，别只改这边。
+     ③ 质感四件套全部走令牌（--shadow-sm 接触阴影 / --shadow 大范围柔影 / --inner 顶边
+        内高光 / --sunken 内嵌下陷），浅色主题整组换掉 —— 深色的黑影铺在白底上是脏的。 */
   :root{
-    --bg:#0e1116; --panel:#161b22; --panel2:#1c232c; --line:#262d38;
+    color-scheme:dark;
+    --bg:#0b0f15; --panel:#161b22; --panel2:#1c232c; --panel-hi:#1b222c;
+    --line:#262d38; --line2:#333d4c;
     --fg:#e6edf3; --fg2:#c9d1d9; --dim:#8b949e; --dim2:#6e7681;
     --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#58a6ff; --store:#a371f7;
     --stamp:#d29922;   /* 版本戳徽标：深浅两套主题视觉一致（浅色下单独加深） */
     --inset:#0b0e13; --hover:#232c37; --hoverline:#39424f;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.45);
+    --shadow:0 16px 40px -26px rgba(0,0,0,.85);
+    --shadow-pop:0 30px 70px -28px rgba(0,0,0,.9),0 1px 2px rgba(0,0,0,.5);
+    --inner:inset 0 1px 0 rgba(255,255,255,.05);
+    --sunken:inset 0 1px 4px rgba(0,0,0,.35);
+    --ring:rgba(88,166,255,.55); --sel:rgba(88,166,255,.32);
+    --grad:linear-gradient(135deg,#2f81f7,#8b5cf6);      /* 品牌渐变：logo 方块 */
+    --primary:linear-gradient(180deg,#2d7ef2,#1f6feb);   /* 主按钮 */
+    --primary-h:linear-gradient(180deg,#3d8bf8,#2a76ef);
+    --glow1:rgba(47,129,247,.13); --glow2:rgba(139,92,246,.11);   /* 页面顶部两团环境光 */
   }
   /* 白色主题（V4.15.3 建；V4.15.7 按用户要求反转：功能区=灰 #f6f8fa、按钮/内嵌=白，
      页面底色加深为 #e9edf2 防与功能区同色）。body.light 覆盖变量 + 修正少量深色专属写死的颜色。
-     偏好存本浏览器（localStorage），不进服务端配置 —— 外观是每台浏览器自己的事。 */
+     偏好存本浏览器（localStorage），不进服务端配置 —— 外观是每台浏览器自己的事。
+     V4.19.0：质感四件套同步换浅色版（阴影改用冷灰、内高光改成白色、环境光调到几乎看不见）。 */
   body.light{
-    --bg:#e9edf2; --panel:#f6f8fa; --panel2:#ffffff; --line:#d0d7de;
+    color-scheme:light;
+    --bg:#e9edf2; --panel:#f6f8fa; --panel2:#ffffff; --panel-hi:#fdfefe;
+    --line:#d0d7de; --line2:#c3cad4;
     --fg:#141721; --fg2:#24292f; --dim:#4b535c; --dim2:#59636e;
     --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#0969da; --store:#8250df;
     --stamp:#d97706;   /* 浅色下用橙黄金（用户指定），深色主题保持金色 */
     --inset:#ffffff; --hover:#eaeef2; --hoverline:#d0d7de;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.06);
+    --shadow:0 16px 40px -30px rgba(16,24,40,.45);
+    --shadow-pop:0 30px 70px -36px rgba(16,24,40,.5),0 1px 2px rgba(16,24,40,.08);
+    --inner:inset 0 1px 0 rgba(255,255,255,.9);
+    --sunken:inset 0 1px 3px rgba(16,24,40,.07);
+    --ring:rgba(9,105,218,.45); --sel:rgba(31,111,235,.20);
+    --primary:linear-gradient(180deg,#e8f0fe,#d3e4fd);
+    --primary-h:linear-gradient(180deg,#dde9fd,#c2d9fc);
+    --glow1:rgba(47,129,247,.07); --glow2:rgba(139,92,246,.06);
   }
   body.light .lg:hover{background:var(--hover)}
   body.light button:hover,body.light .btn:hover{background:var(--hover);border-color:var(--hoverline)}
   body.light .kv{border-bottom-color:#eaeef2}
-  body.light .switch{background:#d8dee4;border-color:#d0d7de}
-  body.light .switch::after{background:#fff}
+  body.light .switch{background:linear-gradient(180deg,#e7ebf0,#d8dee4);border-color:#d0d7de}
+  body.light .switch::after{background:linear-gradient(180deg,#fff,#f2f4f7)}
   /* 浅色下的选中态要压过上面那条覆盖（特异性更高），否则开着的滑块会显示成灰的 */
-  body.light .switch[aria-checked="true"]{background:#1f6feb;border-color:#1f6feb}
+  body.light .switch[aria-checked="true"]{background:linear-gradient(180deg,#3d8bf8,#1f6feb);border-color:#1f6feb}
   body.light .switch[aria-checked="true"]::after{left:20px;background:#fff}
   body.light .lg.WARN{background:rgba(154,103,0,.10)}
   body.light .lg.ERR{background:rgba(207,34,46,.08)}
   /* 浅色下的主按钮换淡蓝（高饱和蓝在白底上刺眼）；换肤瞬间禁用所有过渡防闪烁 */
-  body.light button.primary{background:#d3e4fd;border-color:#a8c7fa;color:#0b57d0}
-  body.light button.primary:hover{background:#c2d9fc}
+  body.light button.primary{background:var(--primary);border-color:transparent;color:#0b57d0;
+    box-shadow:0 6px 18px -12px rgba(31,111,235,.6),var(--shadow-sm),var(--inner)}
+  body.light button.primary:hover{background:var(--primary-h)}
   body.theme-fading *{transition:none!important}
   *{box-sizing:border-box}
   html,body{height:100%}
+  /* 滚动条：细、无轨道、圆头滑块 —— 滑块用 3px 页面底色描边做出"内缩"观感 */
+  html{scrollbar-width:thin;scrollbar-color:var(--hoverline) transparent}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--hoverline);border:3px solid var(--bg);border-radius:999px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
+  ::selection{background:var(--sel);color:var(--fg)}
+  :focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:6px}
   body{
     margin:0; background:var(--bg); color:var(--fg);
     font:14px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
     display:flex; flex-direction:column;
   }
+  /* 页面顶部两团环境光（左蓝右紫，各一个径向渐变）：给纯色底一点纵深。
+     固定定位 + 不吃指针事件 —— 只合成一次，滚动时它不动、也不重绘。 */
+  body:before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(880px 420px at 8% -12%,var(--glow1),transparent 62%),
+               radial-gradient(720px 380px at 94% -16%,var(--glow2),transparent 62%)}
+  header,main{position:relative;z-index:1}
   a{color:var(--info);text-decoration:none} a:hover{text-decoration:underline}
 
-  /* 顶栏 */
+  /* 顶栏：卡面渐变 + 底部一条"两端淡出"的品牌光带（1px 渐变，比整条实色线轻） */
   header{
     display:flex;align-items:center;gap:14px;
-    padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel);
-    flex:0 0 auto;
+    padding:12px 18px;flex:0 0 auto;position:relative;
+    background:linear-gradient(180deg,var(--panel-hi),var(--panel));
+    border-bottom:1px solid var(--line);box-shadow:var(--shadow-sm);
   }
-  .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#1f6feb,#a371f7);
-    display:grid;place-items:center;font-weight:700;font-size:14px;flex:0 0 auto}
-  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px}
+  header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(88,166,255,.5) 22%,rgba(163,113,247,.5) 68%,transparent)}
+  .logo{width:30px;height:30px;border-radius:9px;background:var(--grad);color:#fff;
+    display:grid;place-items:center;font-weight:700;font-size:14px;flex:0 0 auto;
+    box-shadow:0 6px 16px -8px rgba(47,129,247,.95),var(--inner);background-origin:border-box}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
   header .sub{font-size:12px;color:var(--dim2)}
   .spacer{flex:1}
-  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
-  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-  .dot.off{background:var(--err);box-shadow:0 0 8px var(--err)}
-  .dot.idle{background:var(--warn);box-shadow:0 0 8px var(--warn)}
-  .status{font-size:12.5px;display:flex;align-items:center;color:var(--dim)}
+  /* 状态点 + 文字包成胶囊（亮着的那颗自带一圈同色淡晕） */
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:1px;flex:0 0 auto}
+  .dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(63,185,80,.15),0 0 9px var(--ok)}
+  .dot.off{background:var(--err);box-shadow:0 0 0 3px rgba(248,81,73,.16),0 0 9px var(--err)}
+  .dot.idle{background:var(--warn);box-shadow:0 0 0 3px rgba(210,153,34,.16),0 0 9px var(--warn)}
+  .status{font-size:12.5px;display:inline-flex;align-items:center;color:var(--dim);
+    background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+    padding:3px 11px 3px 10px;box-shadow:var(--inner)}
 
   /* 主体。V4.8.6：回到"正常文档流 + 每行等宽列"的常规布局。
      ─────────────────────────────────────────────────────────────
@@ -94,34 +150,48 @@
   .row.three > div > .card:last-child{flex:1}
   @media(max-width:900px){.row.two,.row.three{grid-template-columns:1fr}}
 
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
-  .card h2{font-size:12px;margin:0 0 10px;color:var(--dim);font-weight:600;letter-spacing:.6px;text-transform:uppercase}
+  /* 卡片：卡面自上而下微微变暗（--panel-hi → --panel）+ 顶边内高光 + 两层阴影
+     （贴地的 1px 接触阴影 + 远处大范围柔影）= "浮起来"的三件套。
+     ⚠️ 渐变填充 + 带边框的元素必须让 background-origin 与 background-clip 对齐
+     （同取 border-box），否则透明/半透明边框那 1px 会露出去渐变"平铺回来"的另一头
+     —— 表现为两端各一条对向颜色的细线（docs 站点踩过，见那次 commit b84f8b7）。 */
+  .card{background:linear-gradient(180deg,var(--panel-hi),var(--panel));
+    border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    box-shadow:var(--shadow-sm),var(--shadow),var(--inner);background-origin:border-box}
+  .card h2{font-size:11.5px;margin:0 0 11px;color:var(--dim);font-weight:600;letter-spacing:.7px;text-transform:uppercase}
 
-  /* 指标卡 */
-  .metric{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;position:relative;overflow:hidden}
+  /* 指标卡：沿用左侧 3px 色条（与悬浮条同一做法），另在右上角加一团同色柔光（--tint）。
+     色条负责"可辨识"，柔光负责"颜色氛围"，两者都不抢中间那个数字。 */
+  .metric{background:linear-gradient(180deg,var(--panel-hi),var(--panel));
+    border:1px solid var(--line);border-radius:12px;padding:13px 15px;position:relative;overflow:hidden;
+    box-shadow:var(--shadow-sm),var(--shadow),var(--inner);background-origin:border-box}
   .metric:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--dim2)}
-  .metric.hit:before{background:var(--ok)}
-  .metric.miss:before{background:var(--info)}
-  .metric.store:before{background:var(--store)}
-  .metric.dyn:before{background:var(--warn)}
-  .metric.err:before{background:var(--err)}
+  .metric:after{content:"";position:absolute;right:-28px;top:-40px;width:104px;height:104px;border-radius:50%;
+    background:radial-gradient(closest-side,var(--tint,transparent),transparent 74%);pointer-events:none}
+  .metric.hit{--tint:rgba(63,185,80,.20)}    .metric.hit:before{background:var(--ok)}
+  .metric.miss{--tint:rgba(88,166,255,.20)}  .metric.miss:before{background:var(--info)}
+  .metric.store{--tint:rgba(163,113,247,.20)}.metric.store:before{background:var(--store)}
+  .metric.dyn{--tint:rgba(210,153,34,.18)}   .metric.dyn:before{background:var(--warn)}
+  .metric.err{--tint:rgba(248,81,73,.18)}    .metric.err:before{background:var(--err)}
   .metric .k{font-size:11.5px;color:var(--dim);letter-spacing:.4px}
-  .metric .v{font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.25;margin-top:2px}
-  .metric .n{font-size:11px;color:var(--dim2)}
+  .metric .v{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:3px;
+    letter-spacing:-.3px}
+  .metric .n{font-size:11px;color:var(--dim2);margin-top:1px}
   .metric.alert .v{color:var(--warn)}
   .metric.danger .v{color:var(--err)}
 
-  /* 日志。V4.8.6：回到**固定高度**（360px）—— 这是最简单也最可控的"有上界"。
+  /* 日志。V4.8.6：回到**固定高度**（400px）—— 这是最简单也最可控的"有上界"。
      沿革别再重犯：V4.8.3 用 `flex:1` 却没上界 → 高度由同行右栏决定、越长越长；
      V4.8.5 改成由视口高度决定 → 窗口一小就被压扁、文字错位。
-     固定 360px 配 `align-items:start`（见 .row）**不会**留下空白：卡片高度就等于自身内容高。 */
+     固定 400px 配 `align-items:start`（见 .row）**不会**留下空白：卡片高度就等于自身内容高。 */
   #logWrap{max-height:none}
   #log{height:400px;overflow:auto;font:12px/1.65 Consolas,"Cascadia Mono",monospace;
-    background:var(--inset);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+    background:var(--inset);border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+    box-shadow:var(--sunken)}
   /* ⚠️ 不要把 #log 改成 flex:1 弹性高度（V4.14.15 试过、V4.14.16 回退）：
      弹性链条里容器高度由内容参与决定，日志越多卡片越长 —— 表现为日志卡
      "无限向下拉伸"。固定高度 + overflow:auto 才是这套布局的正确形态。 */
-  .lg{display:flex;gap:9px;white-space:nowrap;padding:1px 0;border-radius:3px}
+  .lg{display:flex;gap:9px;white-space:nowrap;padding:1.5px 5px;border-radius:6px}
   .lg:hover{background:var(--hover)}
   .lg .t{color:var(--dim2);flex:0 0 auto}
   .lg .tag{flex:0 0 52px;font-weight:700;font-size:11px}
@@ -137,51 +207,82 @@
   .vsep{width:1px;align-self:stretch;background:var(--line);margin:0 6px}
   /* 设置面板（V4.15.2）：页眉齿轮弹出，滑块开关（aria-checked 驱动外观） */
   .gear{font-size:15px;padding:5px 11px}
-  #settingsPanel{position:fixed;top:60px;right:14px;z-index:120;width:350px;max-width:92vw;padding:8px 14px 12px}
+  #settingsPanel{position:fixed;top:60px;right:14px;z-index:120;width:350px;max-width:92vw;padding:10px 16px 14px;
+    box-shadow:var(--shadow-pop),var(--inner)}
   /* 面板装配状态（数据到位前）：禁用内部过渡，滑块不会当着用户的面从"关"滑到"开" */
   #settingsPanel.populating *{transition:none!important}
-  .setGroup{font-size:11px;color:var(--dim);letter-spacing:.6px;margin:10px 0 2px;border-bottom:1px solid var(--line);padding-bottom:3px}
+  .setGroup{font-size:11px;color:var(--dim);letter-spacing:.6px;margin:12px 0 2px;
+    border-bottom:1px solid var(--line);padding-bottom:4px}
   .setRow{display:flex;align-items:center;gap:10px;padding:7px 0}
   .setName{flex:1;font-size:12.5px;color:var(--fg2)}
-  .switch{position:relative;width:40px;height:22px;min-width:40px;border-radius:11px;background:#39424f;border:1px solid #4a5568;transition:.15s;padding:0}
-  .switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#8b949e;transition:.15s}
-  .switch[aria-checked="true"]{background:#1f6feb;border-color:#1f6feb}
+  /* 滑块：轨道带内阴影（凹槽），开态是蓝渐变 + 一圈淡蓝晕，圆钮带投影 */
+  .switch{position:relative;width:40px;height:22px;min-width:40px;border-radius:11px;
+    background:linear-gradient(180deg,#2a323e,#39424f);border:1px solid #4a5568;
+    box-shadow:var(--sunken);transition:.15s;padding:0}
+  .switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:linear-gradient(180deg,#fff,#c9d1d9);box-shadow:0 1px 3px rgba(0,0,0,.5);transition:.15s}
+  .switch[aria-checked="true"]{background:linear-gradient(180deg,#2f81f7,#1f6feb);border-color:#1f6feb;
+    box-shadow:0 0 0 3px rgba(31,111,235,.14),var(--sunken)}
   .switch[aria-checked="true"]::after{left:20px;background:#fff}
   .switch:disabled{opacity:.45;cursor:not-allowed}
   .mini{font-size:11.5px;padding:3px 8px}
-  .mini.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-  body.light .mini.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+  .mini.on{background:linear-gradient(180deg,#2f81f7,#1f6feb);border-color:transparent;color:#fff}
+  body.light .mini.on{background:linear-gradient(180deg,#2f81f7,#1f6feb);border-color:transparent;color:#fff}
   .setHead{margin:2px 0 4px}
   .setHead b{font-size:13.5px;color:var(--fg)}
   .setHead span{display:block;font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.5}
   /* V4.15.5：按钮不再带颜色过渡动画（用户反馈悬停渐变观感眩晕）——
-     悬停变色保持瞬时切换。要给哪类元素加过渡，先想清楚它会不会被鼠标反复扫过。 */
-  button,.btn{font:inherit;font-size:12.5px;padding:6px 12px;border-radius:7px;cursor:pointer;
-    background:var(--panel2);color:var(--fg);border:1px solid var(--line)}
+     悬停变色保持瞬时切换。要给哪类元素加过渡，先想清楚它会不会被鼠标反复扫过。
+     V4.19.0：按钮整体改成"竖向微渐变 + 顶边内高光 + 接触阴影"的实体感，按下时下沉 1px
+     （瞬时、无过渡，符合上面那条）；主按钮是蓝渐变 + 蓝色外发光。 */
+  button,.btn{font:inherit;font-size:12.5px;padding:6px 12px;border-radius:8px;cursor:pointer;
+    background:linear-gradient(180deg,var(--panel2),var(--panel));color:var(--fg);
+    border:1px solid var(--line);box-shadow:var(--shadow-sm),var(--inner);background-origin:border-box}
   button:hover,.btn:hover{background:var(--hover);border-color:var(--hoverline)}
-  button.primary{background:#1f6feb;border-color:#1f6feb}
-  button.primary:hover{background:#2b7cf0}
+  button:active,.btn:active{transform:translateY(1px)}
+  button:disabled,.btn:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+  button:disabled:hover,.btn:disabled:hover{background:linear-gradient(180deg,var(--panel2),var(--panel));border-color:var(--line)}
+  button.primary{background:var(--primary);border-color:transparent;color:#fff;
+    box-shadow:0 6px 18px -10px rgba(31,111,235,.95),var(--shadow-sm),var(--inner)}
+  button.primary:hover{background:var(--primary-h)}
+  /* 唯一的主 CTA（启动游戏）：更大的外发光，是全页最亮的一颗按钮 */
+  button.hero{box-shadow:0 12px 30px -12px rgba(31,111,235,1),var(--shadow-sm),var(--inner)}
 
   /* 缓存信息 */
-  .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
   .kv:last-child{border-bottom:none}
   .kv .k{color:var(--dim)}
   .kv .v{font-variant-numeric:tabular-nums;text-align:right}
-  .bars{margin-top:10px;display:flex;flex-direction:column;gap:7px}
-  .bar .bl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);margin-bottom:3px}
-  .bar .bt{height:6px;background:var(--inset);border-radius:4px;overflow:hidden}
-  .bar .bf{height:100%;background:linear-gradient(90deg,#1f6feb,#58a6ff);border-radius:4px}
-  .bar .bf.alt{background:linear-gradient(90deg,#8957e5,#a371f7)}
+  .bars{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+  .bar .bl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);margin-bottom:4px}
+  .bar .bt{height:7px;background:var(--inset);border-radius:999px;overflow:hidden;box-shadow:var(--sunken)}
+  .bar .bf{height:100%;background:linear-gradient(90deg,#1f6feb,#58a6ff);border-radius:999px;
+    box-shadow:0 0 10px -2px rgba(88,166,255,.8)}
+  .bar .bf.alt{background:linear-gradient(90deg,#8957e5,#a371f7);border-radius:999px;
+    box-shadow:0 0 10px -2px rgba(163,113,247,.8)}
 
-  /* 提示与说明 */
-  .hint{border-left:3px solid var(--info);background:rgba(88,166,255,.07);
-    padding:9px 12px;border-radius:0 7px 7px 0;font-size:12.5px;color:var(--fg2)}
-  .hint.warn{border-color:var(--warn);background:rgba(210,153,34,.08)}
-  .hint.err{border-color:var(--err);background:rgba(248,81,73,.08)}
-  .hint.ok{border-color:var(--ok);background:rgba(63,185,80,.08)}
-  code{background:var(--inset);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px;
+  /* 提示与说明：左侧色条 + 极淡的同色横向渐变底（比整块实色底"轻"，不抢正文） */
+  .hint{border:1px solid var(--line);border-left:3px solid var(--info);
+    background:linear-gradient(90deg,rgba(88,166,255,.10),rgba(88,166,255,.03));
+    padding:10px 13px;border-radius:10px;font-size:12.5px;color:var(--fg2)}
+  .hint.warn{border-left-color:var(--warn);background:linear-gradient(90deg,rgba(210,153,34,.12),rgba(210,153,34,.03))}
+  .hint.err{border-left-color:var(--err);background:linear-gradient(90deg,rgba(248,81,73,.12),rgba(248,81,73,.03))}
+  .hint.ok{border-left-color:var(--ok);background:linear-gradient(90deg,rgba(63,185,80,.12),rgba(63,185,80,.03))}
+  /* 行内语义标记（红绿灯体检表 / 各状态行用）。这四个 class 是 JS 一直在写的，
+     V4.19.0 之前样式表里没有它们 —— 于是"可写 / 不可写 / 未检测"全是同一个颜色。 */
+  .ok{color:var(--ok)} .bad{color:var(--err)} .wait{color:var(--warn)} .dim{color:var(--dim2)}
+  code{background:var(--inset);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px;
     font-family:Consolas,monospace}
-  details{margin-top:4px} summary{cursor:pointer;color:var(--dim);font-size:12.5px;outline:none}
+  details{margin-top:4px}
+  /* 折叠块：去掉浏览器默认三角，换一个自绘的小箭头（打开时转 90°） */
+  summary{cursor:pointer;color:var(--dim);font-size:12.5px;outline:none;list-style:none;
+    display:flex;align-items:center;gap:7px;padding:3px 6px;border-radius:7px}
+  summary::-webkit-details-marker{display:none}
+  summary:hover{background:var(--hover);color:var(--fg2)}
+  summary:before{content:"";width:5px;height:5px;flex:0 0 auto;margin-left:2px;
+    border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+    transform:rotate(-45deg);transition:transform .18s}
+  details[open] summary:before{transform:rotate(45deg)}
   details[open] summary{margin-bottom:8px}
   details ol{margin:6px 0 0;padding-left:22px;font-size:12.5px;color:var(--fg2)}
   details li{margin:4px 0}
@@ -195,7 +296,7 @@ try{if(localStorage.getItem('gbfTheme')==='light')document.body.classList.add('l
 <header>
   <div class="logo">GBF</div>
   <div>
-    <h1>碧蓝幻想本地缓存程序 <span id="verBadge" style="font-size:12px;vertical-align:2px;color:var(--dim);font-weight:normal;border:1px solid var(--line);border-radius:6px;padding:1px 8px">V—</span></h1>
+    <h1>碧蓝幻想本地缓存程序 <span id="verBadge" style="font-size:12px;vertical-align:2px;color:var(--dim);font-weight:normal;border:1px solid var(--line);border-radius:999px;padding:1px 10px;background:var(--inset);box-shadow:var(--inner)">V—</span></h1>
     <div class="sub" id="subline">正在连接服务…</div>
   </div>
   <div class="spacer"></div>
@@ -250,7 +351,7 @@ try{if(localStorage.getItem('gbfTheme')==='light')document.body.classList.add('l
        profile；这里只是换个程序去打开同一个 URL，缓存照样靠系统 PAC 生效。 -->
   <div class="card" style="margin:2px 0 14px">
     <div class="btns" style="margin:0">
-      <button id="btnLaunchGame" class="primary" style="font-size:14px;padding:9px 18px" onclick="launchGame(this)">▶ 启动游戏</button>
+      <button id="btnLaunchGame" class="primary hero" style="font-size:14px;padding:9px 18px" onclick="launchGame(this)">▶ 启动游戏</button>
       <button id="btnGameGear" style="align-self:center;padding:6px 10px" title="自定义用来打开游戏的程序（默认：系统默认浏览器）" onclick="toggleGameEdit()">⚙</button>
       <button id="btnAccel" style="align-self:center" title="启动加速器（通用：启动 ⚙ 里选的任意 exe）" onclick="launchAccelerator(this)">⚡ 启动加速器</button>
       <button id="btnAccelGear" style="align-self:center;padding:6px 10px" title="自定义加速器 exe 路径" onclick="toggleAccelEdit()">⚙</button>
@@ -260,7 +361,7 @@ try{if(localStorage.getItem('gbfTheme')==='light')document.body.classList.add('l
          这里只留高频主操作 —— 动作面板从两行收缩为一行。 -->
     <div id="accelEditRow" style="display:none;margin-top:10px">
       <div class="btns">
-        <input id="accelPathInput" type="text" readonly="readonly" style="flex:1;min-width:280px;font:inherit;font-size:12.5px;padding:6px 10px;border-radius:7px;border:1px solid var(--line);background:#0d1117;color:var(--fg2);cursor:pointer" placeholder="加速器 exe 完整路径（点输入框或「浏览…」选择）" onclick="browseAccelFile()" />
+        <input id="accelPathInput" type="text" readonly="readonly" style="flex:1;min-width:280px;font:inherit;font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--inset);color:var(--fg2);cursor:pointer;box-shadow:var(--sunken)" placeholder="加速器 exe 完整路径（点输入框或「浏览…」选择）" onclick="browseAccelFile()" />
         <button onclick="browseAccelFile()" id="btnAccelBrowse">浏览…</button>
         <button class="primary" onclick="saveAccelPath()">保存</button>
         <button onclick="toggleAccelEdit(false)">取消</button>
@@ -269,7 +370,7 @@ try{if(localStorage.getItem('gbfTheme')==='light')document.body.classList.add('l
 
     <div id="gameEditRow" style="display:none;margin-top:10px">
       <div class="btns">
-        <input id="gamePathInput" type="text" readonly="readonly" style="flex:1;min-width:280px;font:inherit;font-size:12.5px;padding:6px 10px;border-radius:7px;border:1px solid var(--line);background:#0d1117;color:var(--fg2);cursor:pointer" placeholder="打开游戏用的程序（留空 = 系统默认浏览器；点输入框或「浏览…」选择）" onclick="browseGameFile()" />
+        <input id="gamePathInput" type="text" readonly="readonly" style="flex:1;min-width:280px;font:inherit;font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--inset);color:var(--fg2);cursor:pointer;box-shadow:var(--sunken)" placeholder="打开游戏用的程序（留空 = 系统默认浏览器；点输入框或「浏览…」选择）" onclick="browseGameFile()" />
         <button onclick="browseGameFile()" id="btnGameBrowse">浏览…</button>
         <button class="primary" onclick="saveGamePath()">保存</button>
         <button onclick="clearGamePath()" title="清空该路径，回到「用系统默认浏览器打开」">清空</button>
@@ -339,7 +440,7 @@ try{if(localStorage.getItem('gbfTheme')==='light')document.body.classList.add('l
         <!-- 系统代理（与加速器共存）整块已移到下面的独立卡片（V4.8.3 重新分配布局） -->
 
         <!-- 更改目录：默认收起，点「更改」才展开 -->
-        <div id="rootEdit" style="display:none;margin-top:10px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:8px">
+        <div id="rootEdit" style="display:none;margin-top:10px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:10px;box-shadow:var(--sunken)">
           <div class="muted" style="margin-bottom:6px">输入新目录路径（不存在会自动创建）</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <input id="rootInput" type="text" spellcheck="false"
@@ -449,7 +550,7 @@ try{if(localStorage.getItem('gbfTheme')==='light')document.body.classList.add('l
         <div class="muted" id="srcTip" style="font-size:11.5px;margin-top:6px"></div>
         <div class="muted" id="xvBox" style="font-size:11.5px;margin-top:6px"></div>
 
-        <div id="cleanBox" style="display:none;margin-top:12px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:8px">
+        <div id="cleanBox" style="display:none;margin-top:12px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:10px;box-shadow:var(--sunken)">
           <div style="font-size:12.5px;color:var(--fg2);margin-bottom:6px">
             <b>按类型清理缓存</b>　<span class="muted">点某一类的「清理」会删掉该类全部已缓存文件
             （游戏下次需要时会重新回源）。<b>删除不可撤销</b>，缓存本来就只是加速用的。</span>
@@ -498,7 +599,7 @@ try{if(localStorage.getItem('gbfTheme')==='light')document.body.classList.add('l
     <div id="checkupRows" style="font-size:12.5px;color:var(--fg2)"></div>
     <div class="muted" id="checkupMsg" style="font-size:11.5px;margin-top:6px"></div>
     <div class="muted" id="diagMsg" style="font-size:11.5px;margin-top:6px;word-break:break-all"></div>
-    <div id="testOut" style="display:none;margin-top:10px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:8px;font:12px/1.7 Consolas,monospace;max-height:260px;overflow:auto"></div>
+    <div id="testOut" style="display:none;margin-top:10px;padding:10px;background:var(--inset);border:1px solid var(--line);border-radius:10px;box-shadow:var(--sunken);font:12px/1.7 Consolas,monospace;max-height:260px;overflow:auto"></div>
   </div>
 
   <div class="muted" style="text-align:center;padding:6px 0 2px;line-height:1.8">
@@ -1204,11 +1305,11 @@ function renderGroups(c) {
 
   box.innerHTML = arr.slice(0, 8).map(function (x) {
     var pct = total ? (x.bytes / total * 100) : 0;
-    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid #1c2230">' +
+    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--line)">' +
       '<span style="flex:1;font-family:Consolas,monospace;color:var(--fg2);word-break:break-all">' +
         escapeHtml(x.group) +
         (x.isStamp ? ' <span style="color:var(--stamp);border:1px solid var(--stamp);' +
-          'border-radius:5px;padding:0 5px;font-size:10.5px">版本戳</span>' : '') +
+          'border-radius:999px;padding:0 6px;font-size:10.5px;background:rgba(210,153,34,.14)">版本戳</span>' : '') +
       '</span>' +
       '<span class="muted" style="white-space:nowrap">' + fmtNum(x.files) + ' 个 · ' +
         fmtBytes(x.bytes) + ' · ' + pct.toFixed(1) + '%</span>' +
@@ -1465,7 +1566,7 @@ function renderCleanPanel(c) {
 
   rows.innerHTML = list.map(function (ext) {
     var n = byExt[ext], bs = byBytes[ext] || 0;
-    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid #1c2230">' +
+    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--line)">' +
       '<span style="width:74px;font-family:Consolas,monospace;color:var(--fg2)">' + escapeHtml(ext) + '</span>' +
       '<span class="muted" style="flex:1">' + fmtNum(n) + ' 个 · ' + fmtBytes(bs) + '</span>' +
       '<button onclick="cleanExt(\'' + escapeHtml(ext) + '\')" style="padding:2px 10px;font-size:12px">清理</button>' +
