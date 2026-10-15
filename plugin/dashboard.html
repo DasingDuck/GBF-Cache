@@ -160,14 +160,15 @@
     box-shadow:var(--shadow-sm),var(--shadow),var(--inner);background-origin:border-box}
   .card h2{font-size:11.5px;margin:0 0 11px;color:var(--dim);font-weight:600;letter-spacing:.7px;text-transform:uppercase}
 
-  /* 指标卡：沿用左侧 3px 色条（与悬浮条同一做法），另在右上角加一团同色柔光（--tint）。
+  /* 指标卡：沿用左侧 3px 色条（与悬浮条同一做法），另有一层自上方打下来的同色柔光
+     （--tint，整顶铺开而不是角落一坨 —— 角落圆斑看着像脏点，顶部铺光才像"被照亮"）。
      色条负责"可辨识"，柔光负责"颜色氛围"，两者都不抢中间那个数字。 */
   .metric{background:linear-gradient(180deg,var(--panel-hi),var(--panel));
     border:1px solid var(--line);border-radius:12px;padding:13px 15px;position:relative;overflow:hidden;
     box-shadow:var(--shadow-sm),var(--shadow),var(--inner);background-origin:border-box}
   .metric:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--dim2)}
-  .metric:after{content:"";position:absolute;right:-28px;top:-40px;width:104px;height:104px;border-radius:50%;
-    background:radial-gradient(closest-side,var(--tint,transparent),transparent 74%);pointer-events:none}
+  .metric:after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(130% 90% at 50% -32%,var(--tint,transparent),transparent 62%)}
   .metric.hit{--tint:rgba(63,185,80,.20)}    .metric.hit:before{background:var(--ok)}
   .metric.miss{--tint:rgba(88,166,255,.20)}  .metric.miss:before{background:var(--info)}
   .metric.store{--tint:rgba(163,113,247,.20)}.metric.store:before{background:var(--store)}

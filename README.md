@@ -5,7 +5,7 @@
 **把本机已有的游戏资源当 CDN 用** —— 图片、声音、文字脚本第一次见到它们时，顺手在你自己的电脑上存一份；
 之后再打开游戏，这些资料直接从硬盘读出来，不用再上网重新下载。
 
-`V4.18.4`<!--version--> · Windows 10 / 11 x64 · 零 npm 依赖 · 单文件 exe
+`V4.19.0`<!--version--> · Windows 10 / 11 x64 · 零 npm 依赖 · 单文件 exe
 
 [在线演示（原理动画 + 交互解释）](https://example.github.io/GBF-Cache/)<!--pages--> ·
 [下载最新版](../../releases/latest) ·
