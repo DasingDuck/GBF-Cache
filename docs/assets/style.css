@@ -296,11 +296,15 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .guide .panel.grow{flex:1;min-height:0}
 .guide .loglist{max-height:none;flex:1}
 /* 再在各自内部把多出来的高度分掉，而不是留一坨空白 */
-/* 序号用绝对定位钉在左上角 —— 三张卡因此必然对齐；
-   标题与说明在序号以下的区域里垂直居中，视觉重心落在卡片中部而不是贴着顶边 */
-.guide .step{position:relative;display:flex;flex-direction:column;justify-content:center;
-  padding:84px 22px 30px}
-.guide .step-no{position:absolute;top:26px;left:22px;margin-bottom:0}
+/* 角标与标题同一行（角标在左），说明在下面；整块在卡片里垂直居中。
+   为了让三张卡的"角标行 / 标题 / 说明"各自落在同一条水平线上，
+   说明段给一个固定的最小高度（五行）—— 各卡文案长短不一，
+   不然居中之后行与行会互相错开。 */
+.guide .step{display:flex;flex-direction:column;justify-content:center;padding:30px 22px}
+.guide .step-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.guide .step-head h3{margin:0}
+.guide .step p{margin:0;min-height:calc(6 * 1.72em)}   /* 6 行：三张卡里最长的那段（第 2 张） */
+.guide .step-no{margin-bottom:0}
 /* 卡片被撑高后内容居中，别让字吊在顶上 */
 .guide .feat{display:flex;flex-direction:column;justify-content:center}
 .guide .acc{display:flex;flex-direction:column}
