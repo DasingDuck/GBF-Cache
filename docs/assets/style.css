@@ -29,6 +29,9 @@
   --shadow:0 14px 34px rgba(23,35,58,.11);
   --shadow-sm:0 4px 12px rgba(23,35,58,.07);
   --r:14px; --r-sm:10px;
+  /* 字体栈：早期版本是令牌，恢复扁平版时改成了写死值，但仍有规则引用这两个名字 */
+  --sans:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  --mono:"Cascadia Code",Consolas,"SFMono-Regular",Menlo,monospace;
   --maxw:1180px;
 }
 
@@ -226,17 +229,17 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .g-item{
   position:relative;display:flex;align-items:center;gap:15px;width:100%;
   padding:10px 0;background:none;border:0;cursor:pointer;text-align:left;
-  color:var(--ink-3);font:500 14.5px/1.25 var(--sans);
+  color:var(--dim);font:500 14.5px/1.25 var(--sans);
   transition:color .22s ease;
 }
-.g-item:hover{color:var(--ink-2)}
+.g-item:hover{color:var(--fg2)}
 .g-dot{
   position:relative;flex:0 0 auto;width:17px;height:17px;border-radius:50%;
-  border:1.5px solid var(--stroke);background:var(--paper);
+  border:1.5px solid var(--stroke);background:var(--panel);   /* 空心圆点要有底色，否则竖线会从圈里穿过去 */
   transition:background-color .22s ease,transform .22s ease;
 }
 .g-label{transition:font-size .22s ease}
-.g-item.is-active{color:var(--ink)}
+.g-item.is-active{color:var(--fg)}
 .g-item.is-active .g-dot{background-color:var(--stroke);transform:scale(1.24)}
 .g-item.is-active .g-label{font-size:16.5px;font-weight:700}
 @media (prefers-reduced-motion:reduce){ .g-dot,.g-label{transition:none} }
@@ -259,7 +262,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .guide .feat-ic svg{width:17px;height:17px}
 .guide .feat h3{font-size:15.5px;margin-bottom:6px}
 .guide .feat p{font-size:13.6px;line-height:1.6}
-.guide .guide .step{padding:20px 20px}
+.guide .step{padding:20px 20px}
 .guide .step p{font-size:14px}
 .guide .note-card{margin-top:18px}
 .acc-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
@@ -293,9 +296,9 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .guide .panel.grow{flex:1;min-height:0}
 .guide .loglist{max-height:none;flex:1}
 /* 再在各自内部把多出来的高度分掉，而不是留一坨空白 */
-/* 卡片被撑高后，内容在卡片内居中 —— 试过"编号贴顶、文字贴底"，
-   那样中间会挖出一大块空，反而更像没写完 */
-.guide .step{display:flex;flex-direction:column;justify-content:center}
+/* 卡片被撑高，内容一律顶格：三张卡的序号因此落在同一条水平线上，
+   文字自然向下排（居中会让各卡序号错开） */
+.guide .step{display:flex;flex-direction:column}
 /* 卡片被撑高后内容居中，别让字吊在顶上 */
 .guide .feat{display:flex;flex-direction:column;justify-content:center}
 .guide .acc{display:flex;flex-direction:column}
@@ -488,7 +491,8 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 @media (max-width:900px){ .step::after{display:none} }
 .step-no{
   display:grid;place-items:center;width:36px;height:36px;border-radius:11px;margin-bottom:15px;
-  background:var(--brand);color:var(--fg);font-weight:700;font-size:15px;
+  background:transparent;border:1px solid var(--fg);color:var(--fg);
+  font-weight:700;font-size:15px;
 }
 .step h3{margin:0 0 9px;font-size:17px}
 .step p{margin:0;font-size:14.5px;color:var(--dim)}
@@ -555,7 +559,7 @@ h1,h2,h3{line-height:1.25;letter-spacing:-.01em}
 .disc-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
 .disc-head .ic{width:24px;height:24px;fill:none;stroke:var(--err);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .disc-head h2{margin:0;font-size:21px}
-.disc-note{margin:0;font:600 13.4px/1.4 var(--sans);color:var(--ink-2)}
+.disc-note{margin:0;font:600 13.4px/1.4 var(--sans);color:var(--fg2)}
 .disc-list{margin:0;padding-left:22px;display:grid;gap:12px}
 .disc-list li{font-size:14.5px;color:var(--dim)}
 .disc-list b{color:var(--fg2)}
