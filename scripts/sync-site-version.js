@@ -23,10 +23,11 @@ const path = require('path');
 
 const REPO_NAME = 'GBF-Cache';
 
-// 改版 SkyLeap（Android）的 apk 下载地址。它属于另一个项目，先留空：
+// 改版 SkyLeap（Android）的 apk 下载地址。它属于另一个项目（DasingDuck/SkyLeap-Cache），
+// 本仓库只负责把这个地址写进 docs/assets/version.js 供站点按钮用。
 // 留空时页面上的按钮显示为不可点、提示「下载地址即将提供」；填上后重新跑本脚本即可生效。
-// 例：'https://github.com/你的用户名/某个仓库/releases/latest'
-const SKYLEAP_URL = '';
+// 用 releases/latest 这种形式：apk 每次发新版（v0.3.7…）都不用回来改这里。
+const SKYLEAP_URL = 'https://github.com/DasingDuck/SkyLeap-Cache/releases/latest';
 const ROOT = path.resolve(__dirname, '..');
 const SERVER_JS = path.join(ROOT, 'plugin', 'server.js');
 const OUT_JS = path.join(ROOT, 'docs', 'assets', 'version.js');
