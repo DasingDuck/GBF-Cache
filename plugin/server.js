@@ -37,7 +37,7 @@ const HOST = '127.0.0.1';
 // 程序版本号（唯一来源）。格式 Vx.x.x：主版本.功能版本.修订号。
 // 规矩：**每次功能性改动都要同步递增**——新功能 +1 中间位，修 bug/小调整 +1 末位，
 // 架构级重构 +1 首位。改这里之后，控制台头部、/api/stats、启动日志、托盘悬停提示全部自动跟随。
-const VERSION = 'V4.24.0';
+const VERSION = 'V4.24.1';
 
 // ---------------------------------------------------------------- 缓存目录配置
 //
@@ -91,6 +91,13 @@ function loadConfig() {
 }
 
 const config = loadConfig();
+
+// V4.24.1：更新日模式默认档位由「平衡」改为「积极」——没显式配过 prewarmEnabled 的配置
+// 按积极档处理（全库预热 + 跟随预热都开）。显式选过平衡/安静的配置会写入 false，保持原样；
+// 只有 followEnabled=false 的旧安静档也不会被这条重新打开全库预热。
+if (typeof config.prewarmEnabled !== 'boolean') {
+  config.prewarmEnabled = config.followEnabled !== false;
+}
 
 // 用户显式选过的目录（空 = 没选过）。**只有这个值允许写回 config.json**。
 let chosenCacheRoot = String(config.cacheRoot || '').trim();
@@ -2452,7 +2459,7 @@ async function runPrewarm(variant, oldStamp, newStamp, idleMode) {
 // 其余情况一律服务源站本次返回的正文。指纹信息不足（旧 ETag 没有指纹段）按不一致
 // 处理 —— 保守分支，宁可走回源。
 //
-// 与预热的分工：预热（全库扫）是"提前把整棵树过户好"（积极档，默认关）；跟随式是
+// 与预热的分工：预热（全库扫）是"提前把整棵树过户好"（积极档，V4.24.1 起默认开）；跟随式是
 // "跟着游戏触碰的目录走"（平衡档，默认开）；按需过户是请求路径上的兜底 —— 三者共用
 // 同一套确认与落盘机制（etagMd5 / mergePrewarmHeaders / writePrewarmExt），改一处
 // 必须两边一起想。
@@ -5340,7 +5347,7 @@ async function handle(req, res) {
 
   function settingsState() {
     return {
-      prewarmEnabled: config.prewarmEnabled === true,   // V4.16.0：默认平衡档，全库预热默认关
+      prewarmEnabled: config.prewarmEnabled === true,   // V4.24.1：默认积极档（loadConfig 后归一为 true）
       followEnabled: config.followEnabled !== false,    // 跟随式小预热：默认开
       prewarmMigrateOnly: config.prewarmMigrateOnly === true,
       prewarmNotify: config.prewarmNotify !== false,
