@@ -39,7 +39,9 @@ public class WinApi {
             if (!IsWindowVisible(h)) return true;
             StringBuilder sb = new StringBuilder(512);
             GetWindowText(h, sb, 512);
-            if (sb.ToString() == title) { found = h; return false; }
+            // 用包含匹配：Chromium 的普通标签页窗口标题会带 " - 浏览器名" 后缀，
+            // 而应用模式窗口就是页面标题本身。控制台标题足够独特，不会误中游戏窗口。
+            if (sb.ToString().IndexOf(title, StringComparison.Ordinal) >= 0) { found = h; return false; }
             return true;
         }, IntPtr.Zero);
         return found;
@@ -94,19 +96,34 @@ try {
         return $null
     }
 
-    function Find-Edge {
+    function Get-ConsoleBrowserPath {
+        # config.json 的 consoleBrowserPath（V4.21.0）：空 = 老行为（优先 Edge）
+        try {
+            $cfg = Get-Content (Join-Path $Dir 'config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($cfg.consoleBrowserPath) { return [string]$cfg.consoleBrowserPath }
+        } catch {}
+        return ''
+    }
+
+    function Find-ConsoleBrowser {
+        # 顺序：用户在设置面板指定的浏览器 > Edge > 系统默认浏览器
+        $custom = Get-ConsoleBrowserPath
+        if ($custom) {
+            if (Test-Path -LiteralPath $custom) { return $custom }
+            Trace "配置的控制台浏览器不存在：$custom（回退 Edge）"
+        }
         $cand = @(
             "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
             "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
             "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
         )
-        foreach ($p in $cand) { if ($p -and (Test-Path $p)) { return $p } }
+        foreach ($p in $cand) { if ($p -and (Test-Path -LiteralPath $p)) { return $p } }
         return $null
     }
 
     $NodeExe = Find-Node
-    $EdgeExe = Find-Edge
-    Trace "Node = $NodeExe | Edge = $EdgeExe"
+    $ConsoleBrowserAtStart = Find-ConsoleBrowser
+    Trace "Node = $NodeExe | ConsoleBrowser = $ConsoleBrowserAtStart"
 
     # V4.18.2：重启中转用的两条小料（Restart-Server 用）——
     #   · $ServerStartCmd：交给独立中转进程执行的启动命令（字符串，独立于本进程存活）；
@@ -215,11 +232,20 @@ try {
             return
         }
         if (-not (Test-Server)) { Start-Server | Out-Null }
-        if ($EdgeExe) {
-            Start-Process -FilePath $EdgeExe -ArgumentList @("--app=$BaseUrl")
-            Trace "已打开新的控制台窗口"
+        # 每次现读 config.json：在设置里换了浏览器，不必重启托盘就能生效
+        $browser = Find-ConsoleBrowser
+        if ($browser) {
+            # Chromium 系用 --app= 开无地址栏窗口；Firefox 系没有这个参数，只传 URL。
+            $name = [System.IO.Path]::GetFileName($browser).ToLowerInvariant()
+            if ($name -match '^(firefox|waterfox|librewolf|palemoon)\.exe$') {
+                Start-Process -FilePath $browser -ArgumentList @($BaseUrl)
+            } else {
+                Start-Process -FilePath $browser -ArgumentList @("--app=$BaseUrl")
+            }
+            Trace "已打开新的控制台窗口（$browser）"
         } else {
             Start-Process $BaseUrl
+            Trace "未配置控制台浏览器且未找到 Edge，已用系统默认浏览器打开"
         }
     }
 
@@ -932,16 +958,6 @@ try {
                 $script:Tray.ShowBalloonTip(4000, '预热完成',
                     ("复用 {0} / 预下载 {1}（详情见控制台）" -f $st.prewarm.reused, $st.prewarm.refreshed), 'Info')
                 Trace ("预热结束: " + $pk)
-            }
-        }
-        # 更新日战报（P1-A，V4.18.0）：/api/float-state 的 report 换成新 key 时弹一次气泡。
-        # 与预热气泡同一个开关（服务端在关掉「游戏更新提醒气泡」时直接不下发 report）。
-        if ($st.report -and $st.report.key) {
-            $rk = [string]$st.report.key
-            if ($script:ReportSig -ne $rk) {
-                $script:ReportSig = $rk
-                $script:Tray.ShowBalloonTip(5000, '更新日战报', [string]$st.report.summary, 'Info')
-                Trace ("战报: " + $rk)
             }
         }
     }

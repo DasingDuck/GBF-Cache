@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>碧蓝幻想缓存控制台</title>
+<link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div id="loading" class="screen">正在连接本地缓存服务…</div>
+
+  <div id="offline" class="screen" hidden>
+    <div class="card">
+      <h1>缓存服务未启动</h1>
+      <p>请先启动「碧蓝幻想本地缓存程序」，再回到这里。</p>
+      <p class="muted">本扩展只读取 <code>127.0.0.1:8799</code> 的控制台，不会修改代理设置。</p>
+      <button id="retry" type="button">立即重试</button>
+    </div>
+  </div>
+
+  <!-- 控制台仍然是服务端那唯一一份 dashboard.html；这里只负责把它装进侧栏。
+       allow 里的剪贴板权限是给控制台的“复制 .ext”按钮用的：
+       跨源 iframe 默认拿不到 clipboard，不加这一行按钮会静默失效。 -->
+  <iframe id="console"
+          title="碧蓝幻想本地缓存控制台"
+          allow="clipboard-write; clipboard-read"
+          hidden></iframe>
+
+<script src="sidepanel.js"></script>
+</body>
+</html>

@@ -37,7 +37,7 @@ const HOST = '127.0.0.1';
 // 程序版本号（唯一来源）。格式 Vx.x.x：主版本.功能版本.修订号。
 // 规矩：**每次功能性改动都要同步递增**——新功能 +1 中间位，修 bug/小调整 +1 末位，
 // 架构级重构 +1 首位。改这里之后，控制台头部、/api/stats、启动日志、托盘悬停提示全部自动跟随。
-const VERSION = 'V4.19.0';
+const VERSION = 'V4.22.0';
 
 // ---------------------------------------------------------------- 缓存目录配置
 //
@@ -725,6 +725,11 @@ function isNoiseHost(host) {
 function systemProxyInfo() {
   revalidateSystemProxy();   // 数据过期就后台刷新，本次先用缓存值（V4.12.0：不再同步查注册表）
   const s = readSystemProxy();
+  // V4.20.5：面板要如实 —— 探明不通的本机串接（config.json 里留下的加速器端口、accelProxy、
+  // 系统静态代理残留都算）不能再报"其余流量/回源经它"。候选链与 buildPac 用**同一个表达式**，
+  // 判定读缓存（TTL 2 分钟）并顺手触发刷新，保证结论不会僵死在旧值上。
+  const chainCand = s.upstream || normalizeProxyServer(config.accelProxy) || normalizeProxyServer(s.server);
+  const chainDead = !!(chainCand && isLoopbackAddr(chainCand) && shouldChainTo(chainCand, chainLiveness).chain === false);
   return {
     pacUrl: ourPacUrl(),
     mode: normalizePacMode(config.pacMode),
@@ -733,6 +738,8 @@ function systemProxyInfo() {
     installed: isOurPacUrl(s.autoConfig),
     upstream: s.upstream || '',
     upstreamFrom: s.upstreamFrom,
+    // V4.20.8：面板只讲结果（加速器地址 / 直连、是 / 否）——这几个字段留给接口与测试用，界面不再显示。
+    upstreamDead: chainDead,
     accelProxy: config.accelProxy || '',
     accelProxyFrom: config.accelProxyFrom || '',
     staticProxy: s.enable ? s.server : '',
@@ -1001,8 +1008,12 @@ async function detectUpstreamProxy(force, includeAll) {
     const tunSig = JSON.stringify(tun.adapters) + '|' + (tun.gameIface || '');
     if ((tun.adapters.length || tun.gamePath) && tunSig !== probeTunnelSig) {
       probeTunnelSig = tunSig;
+      // 路由刚被接管/撤销：旧路由上的空闲连接已经不可用，复用它们只会吃到
+      // ECONNRESET/超时。这里立刻清空，连同加速器隧道 agent 的池一起。
+      const dropped = dropIdleSockets(https.globalAgent) + dropIdleSockets(chainAgentCache.agent);
       log('[加速器] 隧道网卡：' + (tun.adapters.map((a) => a.name).join('、') || '无') +
-        '（' + (tun.gamePath || 'GBF 选路未知') + '）—— 路由模式下我们的回源也走它，缓存与加速并用');
+        '（' + (tun.gamePath || 'GBF 选路未知') + '）—— 路由模式下我们的回源也走它，缓存与加速并用' +
+        (dropped ? `（已丢弃 ${dropped} 条旧路由的空闲连接）` : ''));
     }
     probeReport = {
       at: new Date().toISOString(), candidates: tried, picked: detectedUpstream, tunnel: tun,
@@ -1037,11 +1048,25 @@ function currentUpstreamProxy() {
   const cfgVal = String(config.upstreamProxy || '').trim();
   const manual = envVal || cfgVal;
   const m = /^([\w.\-]+):(\d+)$/.exec(manual);
-  if (m) return { host: m[1], port: parseInt(m[2], 10), from: envVal ? '环境变量' : 'config.json' };
+  if (m) {
+    // V4.20.5：配置口（config.json / 环境变量）也要过存活判定 —— 上面那段注释写的正是
+    // "同一个判定，探明不通就跳过"，但这条分支当初漏了它：加速器关了、端口还留在配置里时，
+    // 回源每隔 60 秒白啃一次死端口（chainFailUntil 只兜 60 秒），面板还照报"经加速器"。
+    // 探明不通就不返回 —— 自然落到后面的系统代理 / accelProxy / 自动探测 / 直连，
+    // 且 checkUpstreamHealth 的自动探测路径随之重新启用（加速器再开起来能被重新发现）。
+    if (shouldChainTo(manual, chainLiveness).chain) {
+      return { host: m[1], port: parseInt(m[2], 10), from: envVal ? '环境变量' : 'config.json' };
+    }
+  }
   const s = systemProxyCache.value;
   if (s && s.upstream) {
     const n = /^([\w.\-]+):(\d+)$/.exec(s.upstream);
-    if (n) return { host: n[1], port: parseInt(n[2], 10), from: '系统代理设置' };
+    // V4.20.5：这条分支同样要过存活判定 —— config.json 的 upstreamProxy 会被并进系统缓存
+    // （upstreamFrom=config，见 systemProxyInfo 的 upstream 字段），漏了它等于漏了用户实际
+    // 在用的那个字段：加速器关了仍会每隔 60 秒去啃一次死端口、面板照报"经它"。
+    if (n && shouldChainTo(s.upstream, chainLiveness).chain) {
+      return { host: n[1], port: parseInt(n[2], 10), from: s.upstreamFrom === 'config' ? 'config.json' : '系统代理设置' };
+    }
   }
   const accel = normalizeProxyServer(config.accelProxy);
   if (accel && shouldChainTo(accel, chainLiveness).chain) {
@@ -1196,11 +1221,13 @@ async function checkUpstreamHealth() {
 
 // 给界面/日志看的探测明细
 function upstreamProbeInfo() {
-  const p = currentUpstreamProxy();
+  const p = currentUpstreamProxy();   // 已过存活判定（V4.20.5）：探不通的候选不会在这里"装活"
   return {
     active: !!p,
     proxy: p ? p.host + ':' + p.port : '',
     from: p ? p.from : '',
+    // V4.20.5：面板"回源是否经加速器"靠它把"配置了但探不通"讲清楚（而不是笼统一句"否"）
+    liveness: chainLivenessInfo(),
     lastProbe: probeReport
       ? {
         at: probeReport.at,
@@ -1279,7 +1306,7 @@ const stats = {
   hit: 0, miss: 0, stored: 0, dynamic: 0, error: 0,
   merged: 0, notModified: 0, rejected: 0,
   // P0-5（V4.16.0）：迁移/跟随的计数与耗时。此前迁移耗时不在任何统计里（B-11），
-  // 修完无法验收 —— 先立仪表。P1-A（V4.18.0）：补 refreshed/字节数，更新日战报要用。
+  // 修完无法验收 —— 先立仪表。V4.18.0 起还带 refreshed/字节数（"真变重下"的量）。
   migrate: { tries: 0, ok: 0, failed: 0, msTotal: 0, refreshed: 0, refreshedBytes: 0 },
   follow: { tried: 0, ok: 0, skipped: 0, refreshed: 0, refreshedBytes: 0 },
 };
@@ -1813,8 +1840,6 @@ function noteStampFromPath(restPath) {
   // 让更新日的重下量从「全部文件」降到「真正变了的文件」。触发本身极轻（Set 查询），
   // 重复触发由预热器自己的 doneFor 集合挡掉，详见预热器一节。
   maybePrewarmStamps(stampVariantOf(restPath), m[1]);
-  // P1-A（V4.18.0）：版本戳观感同时喂给"更新日战报"窗口（开窗/续命，见战报一节）。
-  reportNoteStamp(stampVariantOf(restPath), m[1]);
 }
 
 // 纯函数：挑出窗口内仍被请求过的戳。
@@ -1947,7 +1972,40 @@ function listStampDirs() {
 // 统计：stats.prewarm（attempts/reused/refreshed/skipped/failed/runs），随 /health 与
 // /api/stats 自动带出；单次预热结束在服务日志里有一条汇总。
 const PREWARM_CONCURRENCY = 8;      // 条件请求极轻（响应头级别），8 个并发足够快又不显眼
-const PREWARM_MAX_FILES = 5000;     // 防御上限：单次预热最多核对多少个文件
+const PREWARM_MAX_FILES = 5000;     // 防御上限：**积极性**单次预热最多核对多少个文件
+
+// 闲置缓扫（V4.20.0；V4.20.7 起默认阈值 5 分钟 → 1 分钟）：平衡档（跟随开、全库预热关）
+// 专属的第二条预热路径。语义：完全不游玩（"游玩"的口径 = 有游戏流量经过代理，见
+// lastProxyRequestAt 的写入点）满 IDLE_SWEEP_MS 后自动开扫/续扫；恒 2 并发 + 每文件随机间隔
+// （避免匀速的机器味）；**一律只过户**（正文不要，连"真变重下"也留到游玩时按需取）；
+// 有游戏流量或关键路径（按需确认/回退下载）在途时整条让路（见 backgroundShouldYield），
+// 剩余进度存进 resume，下个闲置窗口接着扫 —— 不重来、不丢进度。
+// 与积极性档全库预热的差别只有三处：触发要闲置、并发更低且有抖动、只过户。
+const IDLE_SWEEP_MS = Math.max(1000, parseInt(process.env.GBFCACHE_IDLE_SWEEP_MS || '60000', 10) || 60000);
+const IDLE_SWEEP_CONCURRENCY = 2;
+const IDLE_SWEEP_STOP_MS = 2000;    // 有游戏流量（<2 秒）立即暂停 —— 与许可闸的"活跃"口径相同
+const IDLE_SWEEP_JITTER_MIN = 120;  // 每文件随机间隔区间（毫秒）
+const IDLE_SWEEP_JITTER_MAX = (function () {
+  const v = process.env.GBFCACHE_IDLE_SWEEP_JITTER_MS;             // 测试可置 0 关掉抖动
+  if (v === undefined) return 800;
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 800;
+})();
+const IDLE_SWEEP_CHECK_MS = Math.max(500, parseInt(process.env.GBFCACHE_IDLE_SWEEP_CHECK_MS || '5000', 10) || 5000);
+
+// 关键路径在途计数（V4.20.7）：按需确认（on-miss）与未命中回退下载 —— 后台让路判定的第二根支柱。
+// 只按"流量"会让路漏掉一段：确认说内容变了、或超时回退之后，**下载还在跑、浏览器已不再发新请求**，
+// 那几秒里后台若恢复，就会与这个下载抢 8 槽隧道连接池（ChainAgent 与游戏共用）。
+let criticalUpstreamInFlight = 0;
+
+// 后台让路判定（V4.20.7）：跟随与闲置缓扫共用。两条任一成立就整条暂停（不是降并发）：
+//   ① 有游戏流量（IDLE_SWEEP_STOP_MS 内）—— 保护加载间隙；这个 2 秒窗口本身就是恢复前的尾窗；
+//   ② 有按需确认/回退下载在途 —— 大文件下载期间也不放后台进来。
+// 两者都消失即自动续（跟随泵自带重试；缓扫由下个闲置窗口续）。
+function backgroundShouldYield() {
+  if (Date.now() - lastProxyRequestAt < IDLE_SWEEP_STOP_MS) return true;
+  return criticalUpstreamInFlight > 0;
+}
 
 // P0-5（V4.16.0）③：许可闸 —— 活跃期限 2 个在途、空闲期全速 8 个。
 // 旧版在游戏活跃时"整批真停"（2026-10-14 事故复盘：那让预热在更新日首载 —— 最需要它的
@@ -1969,13 +2027,33 @@ function createGate(limitFn) {
     _state: () => ({ inFlight, waiting: waiters.length }),   // 测试用
   };
 }
-const prewarmGate = createGate(() => (Date.now() - lastProxyRequestAt < 2000 ? PREWARM_ACTIVE_CONCURRENCY : PREWARM_CONCURRENCY));
+// 当前在跑的是哪条预热路（V4.20.0）：'full' = 积极性全库（按活跃度 2/8）；
+// 'idle' = 平衡档闲置缓扫（恒 2 并发 —— 它本身就是"有活动就暂停"，不必再调）。
+// 单值即可：running 闸保证同一时刻只有一条预热在跑。
+let prewarmPolicy = 'full';
+const prewarmGate = createGate(() => (prewarmPolicy === 'idle'
+  ? IDLE_SWEEP_CONCURRENCY
+  : (Date.now() - lastProxyRequestAt < 2000 ? PREWARM_ACTIVE_CONCURRENCY : PREWARM_CONCURRENCY)));
+
+// 闲置判定（V4.20.0）：两条主动预热路径共用的一份口径。
+// **时钟为 0（进程启动后还没有任何游戏流量）不算闲置** —— 这不是"玩完走了"，而是"还没开始"：
+// 此刻连"当前戳"都还不知道（stampLastSeen 空），而 noteStampFromPath 在分流块**之前**执行，
+// 第一个请求经过它时时钟仍是 0 —— 若无此条，平衡档下开机的第一个请求就会把全库扫推起来。
+// 之后的判定 = 距最后一次游戏流量满 IDLE_SWEEP_MS。
+function idleSweepEligible() {
+  return lastProxyRequestAt > 0 && Date.now() - lastProxyRequestAt >= IDLE_SWEEP_MS;
+}
 
 const prewarmState = {
   // 同一新戳只预热一次。进程重启后集合清空会再跑一次 —— 幂等（新地址已有缓存的
   // 全部跳过），代价只是重发一批 304 请求，可接受。
+  // 积极性：观测到切换时即记（现状不变）。闲置缓扫：**跑完才记** —— 被游玩打断后
+  // 要能再触发续扫，见 runPrewarm 末尾。
   doneFor: new Set(),
   running: false,
+  // 闲置缓扫的续扫进度（V4.20.0）：被游戏流量打断时留下 {variant, oldStamp, newStamp,
+  // rels 剩余, stack 待走目录, cnt 累计计数, total 总数}，下个闲置窗口原样接着扫。
+  resume: null,
   stats: {
     attempts: 0, reused: 0, refreshed: 0, skipped: 0, failed: 0, runs: 0,
     lastAt: null, lastFrom: null, lastTo: null,
@@ -1992,10 +2070,16 @@ let prewarmLive = null;
 // 触发入口：noteStampFromPath 学习到戳号时调用。必须同步、极快地返回 ——
 // 它在请求热路径上。真正的工作全部在 runPrewarm 的异步任务里。
 function maybePrewarmStamps(variant, newStamp) {
-  // 设置面板开关（V4.15.2）。**V4.16.0 起默认 = 平衡档：全库预热默认关**（跟随式小预热接管，
-  // config.followEnabled 缺省开；见"跟随式小预热"一节）。要全库核对需显式开启
-  //（面板"更新日模式=积极"或本开关）。
-  if (config.prewarmEnabled !== true) return;
+  // 两条主动预热路径（V4.20.0 起两档分工）：
+  //   · 积极档（prewarmEnabled=true）：观测到版本切换就跑全库核对（许可闸按活跃度 2/8 并发）
+  //     —— 与 V4.16.0 以来的行为完全一致；
+  //   · 平衡档（跟随开、全库预热关）：**完全不游玩**满 IDLE_SWEEP_MS 后才跑"闲置缓扫"
+  //     （恒 2 并发 + 抖动 + 只过户；有游戏流量立即暂停、留到下次闲置续扫）。
+  // 安静档（跟随也关）：两条都不跑，纯按需。
+  const aggressive = config.prewarmEnabled === true;
+  const idleMode = !aggressive && followEnabled();
+  if (!aggressive && !idleMode) return;
+  if (idleMode && !idleSweepEligible()) return;              // 平衡档：只在"完全不游玩"满阈值后才扫
   const key = variant + '/' + newStamp;                      // 全名：两棵语言树共用戳号，必须分开
   if (!/^\d+$/.test(newStamp) || prewarmState.doneFor.has(key)) return;
   // 已有一轮在跑就不叠第二轮（V4.14.11）：两轮并发会把 prewarmLive 实况互相覆盖，
@@ -2024,13 +2108,45 @@ function maybePrewarmStamps(variant, newStamp) {
     if (names.length) prev = names.sort((a, b) => Number(b) - Number(a))[0];
   }
   if (!prev) return;
-  prewarmState.doneFor.add(key);
+  // 积极性：触发即记（现状不变）。平衡档：不在此记 —— 闲置缓扫跑完才记，被游玩打断后
+  // 要能再触发续扫（见 runPrewarm）。
+  if (aggressive) prewarmState.doneFor.add(key);
   prewarmState.running = true;
-  log(`[预热] 检测到版本切换 ${variant}/${prev} -> ${newStamp}，后台核对旧文件中…`);
-  runPrewarm(variant, prev, newStamp)
+  const isResume = idleMode && prewarmState.resume
+    && prewarmState.resume.variant === variant && prewarmState.resume.newStamp === newStamp;
+  log(idleMode
+    ? (isResume
+      ? `[闲置缓扫] 继续慢扫 ${variant}/${prev} -> ${newStamp}（剩 ${prewarmState.resume.rels.length} 个）`
+      : `[闲置缓扫] 已闲置 ${Math.max(1, Math.round(IDLE_SWEEP_MS / 60000))} 分钟以上，开始慢扫 ${variant}/${prev} -> ${newStamp}（2 并发 + 抖动，只过户；游玩或过户在途即让路）`)
+    : `[预热] 检测到版本切换 ${variant}/${prev} -> ${newStamp}，后台核对旧文件中…`);
+  runPrewarm(variant, prev, newStamp, idleMode)
     .catch((e) => log(`[预热] 异常结束（浏览器按需回源兜底，不影响服务）: ${e.message}`))
     .finally(() => { prewarmState.running = false; });
 }
+
+// 闲置缓扫的定时触发（V4.20.0）：平衡档下，"完全不游玩"满 IDLE_SWEEP_MS 后自动开扫/续扫。
+// 为什么必须有时钟：观测触发（noteStampFromPath → maybePrewarmStamps）只在**有请求**时发生 ——
+// 而"闲置"的定义正是没有请求了，得有个定时器把扫推起来。
+// 候选 = 每棵语言树里"最近仍被请求过"的那个戳；前置检查（档位/闲置/去重/在跑）全走
+// maybePrewarmStamps 那一份，不复制。开销：几次时间比较 + 扫一遍 stampLastSeen。
+setInterval(() => {
+  if (config.prewarmEnabled === true) return;      // 积极档走观测触发（保持不变）
+  if (!followEnabled()) return;                    // 安静档不扫
+  if (prewarmState.running) return;
+  if (!idleSweepEligible()) return;
+  const latest = new Map();                        // variant -> { stamp, t }
+  stampLastSeen.forEach((t, k) => {
+    const p = String(k).split('/');
+    if (p.length < 2) return;
+    const cur = latest.get(p[0]);
+    if (!cur || t > cur.t) latest.set(p[0], { stamp: p[p.length - 1], t });
+  });
+  latest.forEach((v, variant) => {
+    if (!/^\d+$/.test(v.stamp)) return;
+    if (prewarmState.doneFor.has(variant + '/' + v.stamp)) return;
+    maybePrewarmStamps(variant, v.stamp);
+  });
+}, IDLE_SWEEP_CHECK_MS);
 
 // 304 过户时写给新缓存元数据的验证器：304 响应自带的优先（它是对新地址的权威回答），
 // 缺了就用旧文件的兜底 —— 两者在 304 语义下应当一致。注意返回键用小写，
@@ -2075,8 +2191,12 @@ function prewarmDropBody(migrateOnly, oldMd5) {
 // md5Only（V4.15.10，按需过户专用）：正文剥离只认「指纹一致」这一条，**不受 migrate-only
 // 开关影响** —— 请求路径讨正文是为了当次响应，指纹不一致时必须把它留下；
 // 若按后台预下载的口径（migrate-only 一律丢正文）处理，就会「丢掉再重取」，白跑一趟。
-async function prewarmFetch(rest, extraHeaders, oldMd5, md5Only) {
-  const dropBody = prewarmDropBody(md5Only ? false : config.prewarmMigrateOnly === true, oldMd5);
+async function prewarmFetch(rest, extraHeaders, oldMd5, md5Only, idleMode) {
+  // 正文剥离判定（V4.20.0：idleMode 显式传参）。**不读模块态** —— 那会让"扫描进行中"被
+  // 并发的其它调用读到，把不该丢正文的请求也当成只过户。闲置缓扫一律"只过户"；其余按老口径：
+  // 按需过户（md5Only）保留正文，后台预下载看 migrate-only 开关。
+  const dropBody = prewarmDropBody(
+    idleMode === true ? true : (md5Only ? false : config.prewarmMigrateOnly === true), oldMd5);
   for (const h of PREWARM_HOSTS) {
     const base = process.env.GBFCACHE_ORIGIN_BASE || ('https://' + h);
     try {
@@ -2112,7 +2232,7 @@ async function writePrewarmExt(filePath, oldMeta, eff, ct) {
 //   ③ 搬运让路 —— 见下面"游戏活跃时整批暂停"。
 // V4.15.9（用户实测：预热仍让游戏卡顿）：200 正文头部一到就比对并掐断（不再下完再扔）；
 //   让路从"每文件歇 400ms"改成"游戏活跃时整批暂停"。
-async function prewarmOne(variant, oldStamp, newStamp, rel, cnt) {
+async function prewarmOne(variant, oldStamp, newStamp, rel, cnt, idleMode) {
   const newRest = `/${variant}/${newStamp}/${rel}`;
   const newPath = cachePathFor(CACHE_ROOT, newRest);
   if (!newPath) { cnt.skipped++; return; }
@@ -2129,11 +2249,13 @@ async function prewarmOne(variant, oldStamp, newStamp, rel, cnt) {
   // 经过代理）时最多放行 PREWARM_ACTIVE_CONCURRENCY 个在途请求，空闲期恢复全速。旧版"整批
   // 真停"的教训：2026-10-14 事故复盘确认，那样预热在更新日首载期间完全停工 —— 而那是它最
   // 该干活的时候。纯跳过的文件（已缓存 / 无 ETag）到不了这里，重启后的重跑几乎全是跳过。
+  // （V4.20.0：闲置缓扫走同一条闸门，策略在闸门里 —— 它在跑时恒 2 并发；"有游戏流量就整条
+  //   暂停"由 runPrewarm 的取件前检查负责，比闸门更硬一档。）
   await prewarmGate.acquire();
   cnt.attempts++;
   let up = null;
   try {
-    up = await prewarmFetch(newRest, { 'if-none-match': meta.ETag }, etagMd5(meta.ETag));
+    up = await prewarmFetch(newRest, { 'if-none-match': meta.ETag }, etagMd5(meta.ETag), false, idleMode);
   } finally {
     prewarmGate.release();
   }
@@ -2169,8 +2291,9 @@ async function prewarmOne(variant, oldStamp, newStamp, rel, cnt) {
   }
 }
 
-async function runPrewarm(variant, oldStamp, newStamp) {
+async function runPrewarm(variant, oldStamp, newStamp, idleMode) {
   // variant = 语言树的基目录名（assets / assets_en）。过户只在**同一棵树内**做。
+  // idleMode（V4.20.0）= 平衡档的闲置缓扫：恒 2 并发 + 抖动、只过户、可暂停可续扫。
   const oldDir = path.join(CACHE_ROOT, variant, oldStamp);
   if (!isInsideRoot(CACHE_ROOT, oldDir) || !fs.existsSync(oldDir)) return;
   prewarmState.stats.runs++;
@@ -2178,31 +2301,43 @@ async function runPrewarm(variant, oldStamp, newStamp) {
   prewarmState.stats.lastFrom = variant + '/' + oldStamp;
   prewarmState.stats.lastTo = variant + '/' + newStamp;
   const startedAt = Date.now();
-  const cnt = { attempts: 0, reused: 0, refreshed: 0, skipped: 0, failed: 0 };
 
-  // 枚举旧戳目录的资源文件（.ext 元数据不算），上限防御
-  const rels = [];
-  const stack = [oldDir];
-  while (stack.length && rels.length < PREWARM_MAX_FILES) {
-    const d = stack.pop();
-    let entries;
-    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
-    for (const e of entries) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) stack.push(p);
-      else if (!e.name.endsWith('.ext')) rels.push(path.relative(oldDir, p).split(path.sep).join('/'));
+  // 续扫（V4.20.0）：上一轮被游玩打断留下的进度，同一 语言树/旧戳/新戳 才接着用
+  //（版本又切了就作废重来 —— 旧列表不再对应新的 prev）。
+  const resume = idleMode && prewarmState.resume
+    && prewarmState.resume.variant === variant && prewarmState.resume.oldStamp === oldStamp
+    && prewarmState.resume.newStamp === newStamp ? prewarmState.resume : null;
+  prewarmState.resume = null;
+
+  let rels, stack, cnt, total;
+  if (resume) {
+    rels = resume.rels; stack = resume.stack; cnt = resume.cnt; total = resume.total;
+  } else {
+    cnt = { attempts: 0, reused: 0, refreshed: 0, skipped: 0, failed: 0 };
+    // 枚举旧戳目录的资源文件（.ext 元数据不算）。积极性档沿用 PREWARM_MAX_FILES 上限（防御）；
+    // 闲置缓扫不设上限 —— 它的目标就是"覆盖整棵树"，而且枚举纯本地、不发任何请求。
+    const walkCap = idleMode ? Infinity : PREWARM_MAX_FILES;
+    rels = [];
+    stack = [oldDir];
+    while (stack.length && rels.length < walkCap) {
+      const d = stack.pop();
+      let entries;
+      try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+      for (const e of entries) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) stack.push(p);
+        else if (!e.name.endsWith('.ext')) rels.push(path.relative(oldDir, p).split(path.sep).join('/'));
+      }
     }
+    total = rels.length;
   }
 
-  // 简单并发池：从游标取件，异常逐文件吞掉（单文件失败绝不影响整批）
   // 预热实况（V4.14.11）：开工即建 live 对象并广播 start，之后每 500ms 广播一次进度 ——
-  // 控制台的更新日提示条与托盘的开始气泡都吃这份数据。
-  prewarmLive = {
-    key: variant + '/' + oldStamp + '->' + newStamp,
-    running: true,
-    total: rels.length, done: 0, reused: 0, refreshed: 0, failed: 0,
-  };
-  broadcast('prewarm', Object.assign({ phase: 'start' }, prewarmLive));
+  // 控制台的更新日提示条与托盘的开始气泡都吃这份数据。续扫不重建对象（数字接着涨、不倒退）。
+  prewarmPolicy = idleMode ? 'idle' : 'full';
+  if (resume && prewarmLive) { prewarmLive.running = true; prewarmLive.total = total; }
+  else prewarmLive = { key: variant + '/' + oldStamp + '->' + newStamp, running: true, total, done: 0, reused: 0, refreshed: 0, failed: 0 };
+  broadcast('prewarm', Object.assign({ phase: resume ? 'progress' : 'start' }, prewarmLive));
   const progressTimer = setInterval(() => {
     prewarmLive.done = cnt.skipped + cnt.reused + cnt.refreshed + cnt.failed;
     prewarmLive.reused = cnt.reused;
@@ -2211,29 +2346,69 @@ async function runPrewarm(variant, oldStamp, newStamp) {
     broadcast('prewarm', Object.assign({ phase: 'progress' }, prewarmLive));
   }, 500);
 
+  // 简单并发池：从游标取件，异常逐文件吞掉（单文件失败绝不影响整批）。
+  // 闲置缓扫在每次取件前多过两道（V4.20.0）：
+  //   ① 有任何游戏流量（<IDLE_SWEEP_STOP_MS）→ 整条暂停（不是降并发）—— 游玩优先；
+  //   ② 随机间隔（抖动）—— 避免几秒一个的匀速节奏透出机器味。
   let cursor = 0;
+  let paused = false;
+  const idleJitterMs = () => (IDLE_SWEEP_JITTER_MAX <= IDLE_SWEEP_JITTER_MIN ? 0
+    : IDLE_SWEEP_JITTER_MIN + Math.floor(Math.random() * (IDLE_SWEEP_JITTER_MAX - IDLE_SWEEP_JITTER_MIN + 1)));
   async function worker() {
-    while (cursor < rels.length) {
-      const rel = rels[cursor++];
-      try { await prewarmOne(variant, oldStamp, newStamp, rel, cnt); }
+    while (true) {
+      if (idleMode) {
+        if (backgroundShouldYield()) { paused = true; return; }   // V4.20.7：流量或关键路径在途都让路
+        const j = idleJitterMs();
+        if (j > 0) await new Promise((r) => setTimeout(r, j));
+      }
+      const i = cursor++;
+      if (i >= rels.length) return;
+      try { await prewarmOne(variant, oldStamp, newStamp, rels[i], cnt, idleMode); }
       catch { cnt.failed++; }
     }
   }
-  await Promise.all(Array.from({ length: Math.min(PREWARM_CONCURRENCY, rels.length) || 1 }, worker));
+  const workers = idleMode ? Math.min(IDLE_SWEEP_CONCURRENCY, rels.length) : Math.min(PREWARM_CONCURRENCY, rels.length);
+  try {
+    await Promise.all(Array.from({ length: workers || 1 }, worker));
+  } finally {
+    // 闸门策略只该在扫描期间是 idle：正常/异常都复位（异常时若留着，下一轮扫描前
+    // 任何经闸门的调用都会吃 2 并发上限）。正文剥离已改显式传参，不再依赖它。
+    prewarmPolicy = 'full';
+    clearInterval(progressTimer);
+  }
 
-  clearInterval(progressTimer);
-  prewarmLive.done = prewarmLive.total;
+  const remain = Math.max(0, rels.length - Math.min(cursor, rels.length));
+
+  if (idleMode && paused && remain > 0) {
+    // 暂停：不 fold 统计、不记 doneFor、不广播 done（托盘"预热中"保持、不误报完成）；
+    // 剩余与累计计数存进 resume，下个闲置窗口接着扫。
+    prewarmLive.done = cnt.skipped + cnt.reused + cnt.refreshed + cnt.failed;
+    prewarmLive.reused = cnt.reused;
+    prewarmLive.refreshed = cnt.refreshed;
+    prewarmLive.failed = cnt.failed;
+    prewarmLive.running = true;              // 跨闲置窗口的"进行中"：扫完才翻假
+    prewarmState.resume = { variant, oldStamp, newStamp, rels: rels.slice(Math.min(cursor, rels.length)), stack, cnt, total };
+    broadcast('prewarm', Object.assign({ phase: 'paused', remain }, prewarmLive));
+    log(`[闲置缓扫] 检测到游戏流量，暂停：已完成 ${prewarmLive.done}/${total}（剩 ${remain}），下次闲置继续`);
+    return;
+  }
+
+  prewarmLive.done = total;
   prewarmLive.reused = cnt.reused;
   prewarmLive.refreshed = cnt.refreshed;
   prewarmLive.failed = cnt.failed;
   prewarmLive.running = false;
   broadcast('prewarm', Object.assign({ phase: 'done' }, prewarmLive));
+  // 闲置缓扫：跑完才记 doneFor（暂停后要能再触发续扫）。积极性仍由触发入口记（现状不变）。
+  if (idleMode) prewarmState.doneFor.add(variant + '/' + newStamp);
 
   const s = prewarmState.stats;
   s.attempts += cnt.attempts; s.reused += cnt.reused; s.refreshed += cnt.refreshed;
   s.skipped += cnt.skipped; s.failed += cnt.failed;
   const took = Date.now() - startedAt;
-  log(`[预热] 完成 ${variant}/${oldStamp} -> ${newStamp}：核对 ${cnt.attempts}（复用 ${cnt.reused} / 预下载 ${cnt.refreshed}）跳过 ${cnt.skipped} 失败 ${cnt.failed}，耗时 ${took}ms`);
+  log(idleMode
+    ? `[闲置缓扫] 完成 ${variant}/${oldStamp} -> ${newStamp}：核对 ${cnt.attempts}（复用 ${cnt.reused}）跳过 ${cnt.skipped} 失败 ${cnt.failed}，耗时 ${took}ms`
+    : `[预热] 完成 ${variant}/${oldStamp} -> ${newStamp}：核对 ${cnt.attempts}（复用 ${cnt.reused} / 预下载 ${cnt.refreshed}）跳过 ${cnt.skipped} 失败 ${cnt.failed}，耗时 ${took}ms`);
   pushLog({ tag: 'STORE', path: `${variant}/${oldStamp} -> ${newStamp}`, source: 'prewarm',
     detail: `复用${cnt.reused} 预下${cnt.refreshed} 跳过${cnt.skipped} 失败${cnt.failed}` });
 }
@@ -2332,9 +2507,16 @@ function migrateOnce(host, rest, newPath, req, source) {
   const key = host + String(rest);
   const existing = migrateInFlight.get(key);
   if (existing) return existing;
+  // V4.20.7：按需（on-miss）确认计入"关键路径在途"—— 后台（跟随/闲置缓扫）在此期间让路；
+  // 跟随自己的确认不计（它就是后台，自己跟自己让路没有意义）。
+  const critical = source !== 'follow';
+  if (critical) criticalUpstreamInFlight++;
   const job = migrateOne(host, rest, newPath, req, source)
     .catch(() => false)
-    .finally(() => migrateInFlight.delete(key));
+    .finally(() => {
+      if (critical) criticalUpstreamInFlight--;
+      migrateInFlight.delete(key);
+    });
   migrateInFlight.set(key, job);
   return job;
 }
@@ -2390,7 +2572,7 @@ async function migrateOne(host, rest, newPath, req, source) {
     try {
       await writeCacheEntry(newPath, up.body, ct, corsHeaders(up.headers, req), '', up.headers);
       ok = fs.existsSync(newPath); detail = 'refreshed';
-      if (ok) refreshedBytes = up.body.length;   // P1-A：战报要的"真变重下"字节
+      if (ok) refreshedBytes = up.body.length;   // "真变重下"的字节（复用的不算）
     } catch { ok = false; }
   }
 
@@ -2432,12 +2614,13 @@ function noteMigrate(source, ok, ms, refreshedBytes) {
 //   · 每次被跟随替掉的是 0.6～1.9 秒的关键路径等待（链路劣化时更高）——覆盖率的边际价值高；
 //   · 12/60s → 24/30s 后的暴露量：每目录每分钟 ≤24～48 个头部级请求，仍严格 ⊂ 触碰目录，
 //     离全库扫（约 5,300 次/更新日）差两个数量级。
-//   · 并发刻意保持 3 不动（一次只调一个变量）；效果用下一份战报复核（跟随覆盖率 / skip 率）。
+//   · 并发刻意保持 3 不动（一次只调一个变量）；效果用 /api/stats 的 stats.follow 复核（ok / skipped）。
 const FOLLOW_PER_DIR = 24;
 const FOLLOW_CONCURRENCY = 3;
 const FOLLOW_DIR_COOLDOWN_MS = 30 * 1000;
 const FOLLOW_MAX_QUEUE = 200;
 const followState = { queue: [], active: 0, seen: new Set(), dirAt: new Map() };
+let followRetryPending = false;    // V4.20.7：让路期间"稍后回来继续"的定时重试是否已挂
 
 function followEnabled() { return config.followEnabled !== false; }
 
@@ -2473,6 +2656,15 @@ function followSchedule(host, variant, stamp, prevStamp, rel) {
 }
 
 function followPump() {
+  // V4.20.7：让路 —— 有游戏流量或关键路径在途时整条暂停；队列还在就定时回来看一眼
+  //（不然这个队列要等到下一次"按需过户成功"才会被重新踢一脚，白等一整个目录的收益）。
+  if (followState.queue.length && backgroundShouldYield()) {
+    if (!followRetryPending) {
+      followRetryPending = true;
+      setTimeout(() => { followRetryPending = false; followPump(); }, 700);
+    }
+    return;
+  }
   while (followState.active < FOLLOW_CONCURRENCY && followState.queue.length) {
     const item = followState.queue.shift();
     followState.active++;
@@ -2481,93 +2673,6 @@ function followPump() {
       .then(() => { followState.active--; followPump(); });
   }
 }
-
-// ---------------------------------------------------------------- 更新日战报（P1-A，V4.18.0）
-//
-// 目的：把一次版本切换的**实际成效**变成可看、可验收的数据。此前这些数字只躺在日志里
-//（实测样例：核对 5299 / 复用 5299 / 0 整包下载 / 458 秒）。控制台"更新日"卡片、SSE 提示条
-// 与托盘气泡都吃这一份。
-//
-// 机制：观察到新戳时开窗并记录各计数器的起点快照；窗口内任何素材请求都"续命"；
-// 安静 REPORT_IDLE_MS（默认 10 分钟；测试用 GBFCACHE_REPORT_IDLE_MS 缩短）后生成战报：
-// 广播 SSE 'report' + pushLog + 服务日志一行 + 存进 stats.report.last（/api/stats 与
-// /api/float-state 都会带出）。戳再次切换时先给旧窗口收尾（reason='superseded'）。
-// 只做"计数差值"，不改任何统计口径；不新增任何出网。
-const REPORT_IDLE_MS = Math.max(500, parseInt(process.env.GBFCACHE_REPORT_IDLE_MS || '600000', 10) || 600000);
-const reportState = { window: null, last: null };
-stats.report = reportState;   // 随 stats 整体序列化：/api/stats 的 stats.report.last
-
-function reportSnapshot() {
-  return {
-    hit: stats.hit, miss: stats.miss,
-    migrate: Object.assign({}, stats.migrate),
-    follow: Object.assign({}, stats.follow),
-  };
-}
-
-// 由 noteStampFromPath 调用（只在 /assets/<数字>/ 形状的路径上）
-function reportNoteStamp(variant, stamp) {
-  const w = reportState.window;
-  if (w && w.variant === variant && w.stamp === stamp) { w.lastActivityAt = Date.now(); return; }
-  if (w) finishReport('superseded');
-  reportState.window = {
-    variant, stamp,
-    startedAt: Date.now(), lastActivityAt: Date.now(),
-    base: reportSnapshot(),
-  };
-  log(`[战报] 观察到 ${variant}/${stamp}，开始记录（安静 ${(REPORT_IDLE_MS / 60000).toFixed(1)} 分钟后生成）`);
-}
-
-function reportDelta(base, now) { return Math.max(0, (now || 0) - (base || 0)); }
-
-function summarizeReport(r) {
-  const reused = reportDelta(r.migrate.refreshed, r.migrate.ok);          // ok 里除"真变重下"之外都算复用
-  const reusedFol = reportDelta(r.follow.refreshed, r.follow.ok);
-  const bytes = r.migrate.refreshedBytes + r.follow.refreshedBytes;
-  return `${r.variant}/${r.stamp}：过户 ${r.migrate.tries + r.follow.tried} 个` +
-    `（复用 ${reused + reusedFol}、真变重下 ${r.migrate.refreshed + r.follow.refreshed}` +
-    `${bytes ? '（' + Math.round(bytes / 1024) + 'KB）' : ''}、失败 ${r.migrate.failed}）` +
-    `；窗口 ${(r.elapsedMs / 60000).toFixed(1)} 分钟；命中 +${r.hitDelta} / 回源 ${r.missDelta}`;
-}
-
-function finishReport(reason) {
-  const w = reportState.window;
-  if (!w) return;
-  reportState.window = null;
-  const now = Date.now();
-  const rep = {
-    key: w.variant + '/' + w.stamp, variant: w.variant, stamp: w.stamp, reason,
-    startedAt: w.startedAt, endedAt: now, elapsedMs: now - w.startedAt,
-    migrate: {
-      tries: reportDelta(w.base.migrate.tries, stats.migrate.tries),
-      ok: reportDelta(w.base.migrate.ok, stats.migrate.ok),
-      failed: reportDelta(w.base.migrate.failed, stats.migrate.failed),
-      refreshed: reportDelta(w.base.migrate.refreshed, stats.migrate.refreshed),
-      refreshedBytes: reportDelta(w.base.migrate.refreshedBytes, stats.migrate.refreshedBytes),
-      msTotal: reportDelta(w.base.migrate.msTotal, stats.migrate.msTotal),
-    },
-    follow: {
-      tried: reportDelta(w.base.follow.tried, stats.follow.tried),
-      ok: reportDelta(w.base.follow.ok, stats.follow.ok),
-      skipped: reportDelta(w.base.follow.skipped, stats.follow.skipped),
-      refreshed: reportDelta(w.base.follow.refreshed, stats.follow.refreshed),
-      refreshedBytes: reportDelta(w.base.follow.refreshedBytes, stats.follow.refreshedBytes),
-    },
-    hitDelta: reportDelta(w.base.hit, stats.hit),
-    missDelta: reportDelta(w.base.miss, stats.miss),
-  };
-  rep.summary = summarizeReport(rep);
-  reportState.last = rep;
-  log(`[战报] ${rep.summary}`);
-  pushLog({ tag: 'REPORT', path: rep.key, source: 'update-day', detail: rep.summary });
-  broadcast('report', rep);
-}
-
-// 静默检查器：只在窗口开着时干活（几次数字比较），1 秒一跳的开销可忽略。
-setInterval(() => {
-  const w = reportState.window;
-  if (w && Date.now() - w.lastActivityAt >= REPORT_IDLE_MS) finishReport('idle');
-}, 1000);
 
 // 清掉过期的版本戳目录。
 // dryRun 缺省为 **true** —— 调用方必须显式传 false 才会真删（安全默认，防止手滑）。
@@ -3314,8 +3419,15 @@ async function fetchOriginShared(key, run) {
     return Object.assign({}, await existing, { leader: false });
   }
   const job = (async () => {
-    const r = await run();
-    return Object.assign({}, r, { leader: true });
+    // V4.20.7：未命中回退下载同样算"关键路径在途"—— 后台（跟随/闲置缓扫）在此期间让路，
+    // 连"确认已返回、正文还在下"的那几秒也不与它抢隧道连接池。
+    criticalUpstreamInFlight++;
+    try {
+      const r = await run();
+      return Object.assign({}, r, { leader: true });
+    } finally {
+      criticalUpstreamInFlight--;
+    }
   })();
   pendingOriginFetches.set(key, job);
   try {
@@ -3437,6 +3549,35 @@ const UPSTREAM_RETRY_BUDGET_MS = 20000; // 总耗时上限（V4.8.11）
 //   spent + 单次超时 > 预算 就放弃重试）。20s = 8s x 2 + 余量，正好留住这条行为 ——
 //   它有 test-retry.js 的用例 3 专门钉着，别只改一个数就把它弄没了。
 
+// 路由切换（加速器连上/断开、VPN 重连）会让**已建立的连接**失效：旧路由上建立的
+// 空闲 socket 还躺在 agent 池里，下一次请求复用它就会 ECONNRESET / 一直等不到响应。
+// 若重试又抓到另一条同样的死连接，就会连吃两次失败 —— 实测 2026-10-19 加速器接管
+// 路由的十几分钟里，每条未命中资源都要 16 秒才回 502，而同一时刻新开连接直连是 200。
+// 所以重试前先把空闲连接清空，让下一次尝试一定走新连接。
+function dropIdleSockets(agent) {
+  if (!agent || !agent.freeSockets) return 0;
+  let n = 0;
+  for (const key of Object.keys(agent.freeSockets)) {
+    const list = agent.freeSockets[key];
+    if (Array.isArray(list)) {
+      for (const sock of list.slice()) {
+        try { sock.destroy(); n++; } catch { /* 忽略 */ }
+      }
+    }
+    delete agent.freeSockets[key];
+  }
+  return n;
+}
+
+// 下一次尝试会用哪个 agent：经加速器时是 chainAgent，否则是 Node 的全局 agent
+function agentForRetry(isHttps, useChain) {
+  if (isHttps && useChain) {
+    const a = chainAgent();
+    if (a) return a;
+  }
+  return isHttps ? https.globalAgent : http.globalAgent;
+}
+
 // 回源请求本体（是否经加速器由 useChain 决定）
 function requestUpstream(targetUrl, reqHeaders, useChain, opts) {
   return new Promise((resolve, reject) => {
@@ -3547,6 +3688,8 @@ function fetchUpstream(targetUrl, reqHeaders, allowChain, opts) {
         throw e;
       }
       if (chained && CHAIN_DEAD.test(msg)) {
+        const dropped = dropIdleSockets(agentForRetry(/^https:/i.test(targetUrl), false));
+        if (dropped) log(`[回源] 已丢弃 ${dropped} 条空闲连接 —— 改直连重试（${msg}）`);
         log(`[上游代理] 回源失败（${msg}），改直连重试`);
         return attempt(false);
       }
@@ -3554,6 +3697,11 @@ function fetchUpstream(targetUrl, reqHeaders, allowChain, opts) {
       if (spent + UPSTREAM_TIMEOUT_MS > UPSTREAM_RETRY_BUDGET_MS) {
         log(`[回源] 已耗时 ${spent}ms（${msg}），再试可能超出预算，放弃重试`);
         throw e;
+      }
+      // 只在「连接级」故障上清池：逻辑类失败（拿到响应后出错）与连接是否还有效无关
+      if (/ECONNRESET|EPIPE|socket hang up|upstream timeout/i.test(msg)) {
+        const dropped = dropIdleSockets(agentForRetry(/^https:/i.test(targetUrl), allowChainNow));
+        if (dropped) log(`[回源] 已丢弃 ${dropped} 条空闲连接，重试走新连接（${msg}）`);
       }
       log(`[回源] ${msg} —— ${UPSTREAM_RETRY_DELAY_MS}ms 后重试（第 ${attemptNo + 1}/${UPSTREAM_MAX_ATTEMPTS} 次）`);
       return new Promise((r) => setTimeout(r, UPSTREAM_RETRY_DELAY_MS)).then(() => attempt(allowChainNow));
@@ -4200,6 +4348,13 @@ function gameLaunchPath() {
   return String(config.gameLaunchPath || '').trim();
 }
 
+// 「打开控制台」用哪个浏览器：config.json 的 "consoleBrowserPath"（V4.21.0 新增）。
+// 空 = 老行为（优先 Edge 应用模式，找不到 Edge 再用系统默认浏览器）；非空 = 用这个 exe，
+// 同样优先走 Chromium 的 --app= 无地址栏窗口。Firefox 系没有 --app=，只传 URL。
+function consoleBrowserPath() {
+  return String(config.consoleBrowserPath || '').trim();
+}
+
 // 经 PowerShell 的 Start-Process（ShellExecute 语义）启动一个 exe，并把结果回调给调用方。
 // 启动加速器与「指定路径启动游戏」共用这一段，避免两处各写一份、日后各自漂移。
 //
@@ -4403,7 +4558,7 @@ async function buildStatsPayload() {
     // 以及"浏览器缓存命中对代理不可见"这处测量盲区。
     sources: sourceCounts(),
     xVersion: xVersionObs,
-    // P1-A（V4.18.0）：迁移/跟随实况 + 档位（控制台"更新日"卡片用）；战报见 stats.report.last
+    // 迁移/跟随实况 + 档位（控制台"当前档位"徽标用；V4.19.7 起卡片并入启动游戏面板）
     followLive: { queued: followState.queue.length, active: followState.active },
     modes: { prewarmEnabled: config.prewarmEnabled === true, followEnabled: followEnabled() },
     // 版本戳状况（V4.7.0）：从已扫好的 byGroup 直接推导，零额外开销，
@@ -4453,6 +4608,7 @@ async function buildStatsPayload() {
     floatWin: floatWinState(),
     accelerator: { path: acceleratorPath() },
     game: { path: gameLaunchPath() },
+    consoleBrowser: { path: consoleBrowserPath() },
     proxy: {
       lastRequestAt: lastProxyRequestAt,
       lastRequestPath: lastProxyRequestPath,
@@ -4621,6 +4777,14 @@ async function handle(req, res) {
   }
 
   if (rawUrl === '/api/stats') {
+    // V4.20.5：控制台轮询这个接口 —— 顺手刷新一次串接候选的存活结论（TTL 2 分钟，最多一次探测），
+    // 让面板"已探明探不通/是否经加速器"两行不依赖"恰好有浏览器取过 PAC"。刻意只挂在这条路由上：
+    // 放在共享的 payload 构造里会让 /health 也触发，抢在"首次取 PAC 还没有结论"之前把候选摘掉。
+    try {
+      const sc = readSystemProxy();
+      const cand = sc.upstream || normalizeProxyServer(config.accelProxy) || normalizeProxyServer(sc.server);
+      if (cand && isLoopbackAddr(cand)) refreshChainLiveness(cand).catch(() => {});
+    } catch { /* 判活失败不影响统计接口 */ }
     return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
       JSON.stringify(await buildStatsPayload()));
   }
@@ -4749,12 +4913,28 @@ async function handle(req, res) {
       JSON.stringify({ ok: true, path: gameLaunchPath() }));
   }
 
-  // 弹原生文件选择框，返回选中的 exe 路径（加速器路径与「指定启动游戏程序」共用）。
-  // ?for=game 只影响对话框标题（同一个选择器，标题说清楚在选什么）。
+  // 设置「打开控制台」用的浏览器：POST /api/set-console-browser-path?path=...
+  // 空 = 恢复老行为（优先 Edge 应用模式，找不到 Edge 再用系统默认浏览器）。
+  // 与 gameLaunchPath 一样不做存在性检查：路径可能在移动盘/网络盘上，真正打开失败会写日志。
+  if (rawUrl.startsWith('/api/set-console-browser-path') && req.method === 'POST') {
+    let np = '';
+    try { np = (new URL('http://x' + rawUrl).searchParams.get('path') || '').trim(); } catch { /* 忽略 */ }
+    saveConfig({ consoleBrowserPath: np });
+    log('[控制台] 控制台浏览器已' + (np ? '设为 ' + np : '恢复默认（优先 Edge）'));
+    return send(res, 200, { 'Content-Type': 'application/json' },
+      JSON.stringify({ ok: true, path: consoleBrowserPath() }));
+  }
+
+  // 弹原生文件选择框，返回选中的 exe 路径（加速器路径、启动游戏程序、控制台浏览器共用）。
+  // ?for=game/console 只影响对话框标题（同一个选择器，标题说清楚在选什么）。
   if (rawUrl.startsWith('/api/browse-file')) {
     let forWhat = '';
     try { forWhat = (new URL('http://x' + rawUrl).searchParams.get('for') || ''); } catch { /* 忽略 */ }
-    const title = forWhat === 'game' ? '选择用来打开游戏的程序（通常是某个浏览器的 exe）' : undefined;
+    const title = forWhat === 'game'
+      ? '选择用来打开游戏的程序（通常是某个浏览器的 exe）'
+      : forWhat === 'console'
+        ? '选择打开控制台窗口的浏览器（建议 Chromium 内核：Edge / Chrome / Iron / Brave / Vivaldi）'
+        : undefined;
     browseFile((picked, err) => {
       const body = JSON.stringify({ path: picked || '', error: err || null });
       send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body);
@@ -5059,9 +5239,7 @@ async function handle(req, res) {
       JSON.stringify(Object.assign({ ok: true, version: VERSION }, st,
         { metrics: floatMetrics(), bypass: pacBypass,
           // 设置面板「游戏更新提醒气泡」（V4.15.2）：关掉时不下发预热实况 → 托盘不再弹气泡。
-          // P1-A：更新日战报同走这个开关（托盘的气泡文案见 tray.ps1）。
-          prewarm: config.prewarmNotify === false ? null : prewarmLive,
-          report: config.prewarmNotify === false ? null : reportState.last })));
+          prewarm: config.prewarmNotify === false ? null : prewarmLive })));
   }
 
   // 控制台页面在 pagehide 时打的"我要走了"信号（navigator.sendBeacon）。
@@ -5159,6 +5337,7 @@ async function handle(req, res) {
       prewarmNotify: config.prewarmNotify !== false,
       autoEvictStamps: config.autoEvictStamps === true,
       openDashboardOnStart: config.openDashboardOnStart !== false,
+      consoleBrowserPath: consoleBrowserPath(),
       autoLaunchGame: config.autoLaunchGame !== false,
       autoLaunchAccel: config.autoLaunchAccel !== false,
       floatOnConsoleClose: config.floatOnConsoleClose !== false,
@@ -5230,7 +5409,13 @@ async function handle(req, res) {
       floatOnConsoleClose: (v) => ({ floatOnConsoleClose: v }),
     };
     if (!cfgKeys[name]) return fail(400, '未知的功能名：' + name);
-    saveConfig(cfgKeys[name](on));
+    const patch = cfgKeys[name](on);
+    // V4.20.3：跟随预热与全库预热是**包含关系**（与三档预设一致：全库开 ⇒ 跟随必开）。
+    // 归一放在这个统一入口 —— 直连 API 也生不出"全库开、跟随关"（最主动的扫描却没有任何
+    // 关键路径保护）；反向同理：关跟随 = 退回不接受任何主动预热。
+    if (patch.prewarmEnabled === true) patch.followEnabled = true;
+    if (patch.followEnabled === false) patch.prewarmEnabled = false;
+    saveConfig(patch);
     log('[设置] ' + name + ' = ' + (on ? '开' : '关'));
     return send(res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
       JSON.stringify({ ok: true, name, on }));
@@ -5608,6 +5793,12 @@ function runAssets() {
     // 被动学习"这个戳还在被用"（V4.7.3）。放进 else 分支：只有真按资源处理的请求才算，
     // 与上面那条 WARN 互斥。（noteStampFromPath 内部还会再校验 /assets/<纯数字>/ 的形状，
     // 所以这里的"静态资源"判定即便偏宽也不会记进奇怪的东西。）
+    // V4.20.0：这条通道（扩展 /f/，旧的按规则拦截路径）同样是"有人在游玩"的证据 ——
+    // 闲置缓扫的启动与暂停止损都读这个时钟，漏掉这里会让走扩展的用户"锁着玩"时被当成闲置。
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      lastProxyRequestAt = Date.now();
+      lastProxyRequestPath = rest;
+    }
     noteStampFromPath(rest);
   }
 
@@ -6340,28 +6531,49 @@ function httpRequestForward(req, u) {
 
 // ---------------------------------------------------------------- 启动
 
-// 找到 Edge 并用应用模式打开控制台；失败则退回默认浏览器打开
-function openDashboard() {
-  const url = `http://${HOST}:${PORT}/`;
-  const { spawn } = require('child_process');
+// Firefox 系没有 Chromium 的 --app= 应用模式；传 URL 本体（普通窗口/标签）而不是
+// --app=，否则命令行参数会被当成未知选项。判错也不致命：最坏是浏览器忽略这个参数。
+function isFirefoxFamily(exe) {
+  return /^(firefox|waterfox|librewolf|palemoon)\.exe$/i.test(path.basename(exe || ''));
+}
 
+// 控制台浏览器的选择顺序：config.json 的 consoleBrowserPath > Edge > 系统默认浏览器。
+// 配置了但文件不存在时回退到老路（并留一条日志），不让一个失效路径把控制台整个弄丢。
+function findConsoleBrowser() {
+  const configured = consoleBrowserPath();
+  if (configured) {
+    try {
+      if (fs.existsSync(configured)) return { exe: configured, configured: true };
+    } catch { /* 路径不可读：按不存在处理 */ }
+    log(`配置的控制台浏览器不存在：${configured} —— 回退到默认方式`);
+  }
   const edgeCandidates = [
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
     path.join(process.env.LOCALAPPDATA || '', 'Microsoft\\Edge\\Application\\msedge.exe'),
   ];
   const edge = edgeCandidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
+  return edge ? { exe: edge, configured: false } : { exe: '', configured: false };
+}
+
+// 用配置的浏览器（或 Edge）打开控制台；失败则退回系统默认浏览器打开。
+function openDashboard() {
+  const url = `http://${HOST}:${PORT}/`;
+  const { spawn } = require('child_process');
+  const target = findConsoleBrowser();
 
   try {
-    if (edge) {
-      // --app= 会开一个没有地址栏和标签栏的独立窗口
-      spawn(edge, [`--app=${url}`], {
+    if (target.exe) {
+      // Chromium 系用 --app=：没有地址栏和标签栏的独立窗口；
+      // Firefox 系只传 URL（普通窗口/标签）。
+      const args = isFirefoxFamily(target.exe) ? [url] : [`--app=${url}`];
+      spawn(target.exe, args, {
         detached: true, stdio: 'ignore',
       }).unref();
-      log('已打开可视化控制台（应用模式窗口）');
+      log(`已打开可视化控制台（${target.configured ? '自定义浏览器' : 'Edge 应用模式'}：${target.exe}）`);
     } else {
       spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
-      log('未找到 Edge，已用默认浏览器打开控制台');
+      log('未配置控制台浏览器且未找到 Edge，已用默认浏览器打开控制台');
     }
   } catch (e) {
     log(`打开控制台失败: ${e.message} —— 可手动访问 ${url}`);
@@ -6486,8 +6698,9 @@ function main() {
       })().catch((e) => { try { log('[巡检] 本轮意外出错（下一轮照常）：' + ((e && e.message) || e)); } catch { /* 忽略 */ } });
     }, 20000);
 
-    // 用 Edge 的「应用模式」打开控制台：无地址栏、无标签页，观感接近原生窗口
-    // （设置面板「启动后打开控制台」可关 —— V4.15.2，关掉后从托盘/双击 exe 手动打开）
+    // 用浏览器「应用模式」打开控制台：无地址栏、无标签页，观感接近原生窗口。
+    // V4.21.0 起可在设置面板指定浏览器（不指定则优先 Edge）。设置面板「启动后打开控制台」
+    // 可关 —— V4.15.2，关掉后从托盘/双击 exe 手动打开。
     if (config.openDashboardOnStart !== false
         && process.env.GBFCACHE_OPEN_UI !== '0' && process.env.ACGP_OPEN_UI !== '0') {
       openDashboard();
