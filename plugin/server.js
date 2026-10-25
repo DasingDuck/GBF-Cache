@@ -37,7 +37,7 @@ const HOST = '127.0.0.1';
 // 程序版本号（唯一来源）。格式 Vx.x.x：主版本.功能版本.修订号。
 // 规矩：**每次功能性改动都要同步递增**——新功能 +1 中间位，修 bug/小调整 +1 末位，
 // 架构级重构 +1 首位。改这里之后，控制台头部、/api/stats、启动日志、托盘悬停提示全部自动跟随。
-const VERSION = 'V4.23.1';
+const VERSION = 'V4.24.0';
 
 // ---------------------------------------------------------------- 缓存目录配置
 //
@@ -547,7 +547,7 @@ function notePacState(sig, prev) {
     if (foreignPac && foreignPac.reason) log(`[系统代理] 没有接管它的原因：${foreignPac.reason}`);
     log('[系统代理] 为避免与加速器互抢，不去动它 —— 缓存接管不会生效'
       + '（可把加速器改成静态代理模式让我们串接，或在它设置里关掉「系统代理/PAC」，'
-      + '或确认它不依赖 PAC 时加载随包的 edge-extension）');
+      + '或确认它不依赖 PAC 时加载随包的 console-extension）');
   }
 }
 
@@ -4604,7 +4604,7 @@ async function buildStatsPayload() {
     },
     extensionHint: {
       port: PORT,
-      folder: path.join(__dirname, 'edge-extension'),
+      folder: path.join(__dirname, 'console-extension'),
     },
     probe: { lastProbeAt, count: probeCount },
     appVersion: VERSION,
@@ -5600,12 +5600,12 @@ fetch('/api/stats', { cache: 'no-store' }).then(function (r) { return r.json(); 
           '没接管的原因：' + (takeover.foreign.reason || '未知') + '<br>' +
           '<b>可选做法</b>：① 把加速器改成「静态代理 / 全局代理」模式 —— 本程序能自动识别并串接它，' +
           '缓存与加速并用（<b>首选</b>）；② 在占用它的程序里关掉「系统代理 / PAC」，然后重启本程序；' +
-          '③ 若它不依赖 PAC（TUN 网卡 / 路由模式），可加载随包的 <code>edge-extension</code>' +
+          '③ 若它不依赖 PAC（TUN 网卡 / 路由模式），可加载随包的 <code>console-extension</code>' +
           '（浏览器层优先级高于系统设置）；④ 确认不再需要它时，再手动清空该槽位。')
       : '') +
     line('wait', '说明',
       '接管方式为 <code>system</code> 时，浏览器<b>不需要装扩展</b>：系统代理设置对所有浏览器生效。' +
-      '随包的 <code>edge-extension</code> 是可选兜底 —— 它给 Chromium 内核浏览器单独挂上本程序的 PAC' +
+      '随包的 <code>console-extension</code> 是可选兜底 —— 它给 Chromium 内核浏览器单独挂上本程序的 PAC' +
       '（在 Chromium 里扩展的代理设置优先于系统设置），适合系统槽位被加速器/别的代理占用的情况；不装也能正常缓存。') +
     certRows;
 }).catch(function (e) {
@@ -5654,7 +5654,7 @@ probe.onerror = function () {
     '双击 <code>certs\\ca.crt</code> → 安装证书 → 「当前用户」→「受信任的根证书颁发机构」→ 完成后' +
     '<b>完全退出浏览器再打开</b>（证书信任在启动时加载，只刷新页面不算）。</li>' +
     '<li><b>浏览器自己的代理设置被覆盖</b>：某些代理类扩展会盖掉系统设置（先禁用试试）。' +
-    '若你手动加载过本程序的 <code>edge-extension</code>，再去 <code>edge://extensions</code> 确认它的开关与「开发人员模式」。</li>' +
+    '若你手动加载过本程序的 <code>console-extension</code>，再去 <code>edge://extensions</code> 确认它的开关与「开发人员模式」。</li>' +
     '</ol>';
   var steps = '<div class="box"><b>决定性测试（30 秒）</b>：在<b>这个</b>浏览器的地址栏直接打开<br>' +
     '<code>' + PROBE_URL + '</code><br>' +
@@ -5796,7 +5796,7 @@ function runAssets() {
   if (!isStaticPath) {
     stats.dynamic++;
     pushLog({ tag: 'WARN', path: rest + query, source: 'over-reach' });
-    noteError(`拦截到非静态路径 ${rest}${query} —— 该请求本不该被扩展劫持，请检查 edge-extension/rules.json`);
+    noteError(`拦截到非静态路径 ${rest}${query} —— 该请求本不该被扩展劫持，请检查 console-extension/rules.json`);
     log(`WARN 非静态路径被拦截: ${rest}${query}`);
   } else {
     // 被动学习"这个戳还在被用"（V4.7.3）。放进 else 分支：只有真按资源处理的请求才算，

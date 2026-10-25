@@ -5,7 +5,7 @@
 **将游戏资源缓存至本地告别反复下载资源** —— 
 在碧蓝幻想游玩过程中将图片、声音、文字脚本等游戏资源存储，后续直接读取本地资源提高加载速度 —— 游玩更顺畅、更省流。
 
-`V4.23.1`<!--version--> · Windows 10 / 11 x64 · 零 npm 依赖 · 单文件 exe
+`V4.24.0`<!--version--> · Windows 10 / 11 x64 · 零 npm 依赖 · 单文件 exe
 
 [下载最新版](../../releases/latest) ·
 [介绍与免责声明](介绍与免责声明.md) ·
@@ -81,7 +81,7 @@ flowchart LR
 │  ├─ tray.ps1               托盘启动器：单实例、托盘菜单、控制台窗口、悬浮监控条
 │  ├─ dashboard.html         控制台界面（单文件 HTML，原生 JS，无框架，深/浅双主题）
 │  ├─ certs/                 本地 TLS 终结用的证书（ca.crt + server.crt/key）
-│  ├─ edge-extension/        可选的浏览器扩展（另一种接管方式）
+│  ├─ console-extension/     浏览器扩展（统一版）：侧边栏控制台 + 代理/PAC + 程序随浏览器启停
 │  └─ start-server.bat       直接起服务（需要系统里有 Node）
 ├─ docs/                     GitHub Pages 站点：原理动画 + 缓存布局交互解释
 │  └─ assets/version.js      由脚本生成，勿手改
