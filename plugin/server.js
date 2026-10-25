@@ -37,7 +37,7 @@ const HOST = '127.0.0.1';
 // 程序版本号（唯一来源）。格式 Vx.x.x：主版本.功能版本.修订号。
 // 规矩：**每次功能性改动都要同步递增**——新功能 +1 中间位，修 bug/小调整 +1 末位，
 // 架构级重构 +1 首位。改这里之后，控制台头部、/api/stats、启动日志、托盘悬停提示全部自动跟随。
-const VERSION = 'V4.23.0';
+const VERSION = 'V4.23.1';
 
 // ---------------------------------------------------------------- 缓存目录配置
 //
@@ -425,15 +425,19 @@ function chainLivenessInfo() {
 //        已探明探不通的直接不写进 PAC —— 见上面 shouldChainTo。
 function buildPac(s) {
   const L = [];
+  // 【PAC 必须纯 ASCII（V4.23.1）】Chromium 的 chrome.proxy.settings.set（pacScript.data）
+  // 只接受 ASCII，出现一个非 ASCII 字符就整单拒绝 —— 2026-10-25 实测：扩展端
+  // 「跟随服务端 PAC」一直静默失败、浏览器里只剩兜底 PAC，根因就是这里的中文注释。
+  // 所以：注释一律用 ASCII 写；动态插值（如探测错误串）过 asciiOnly；末端再加保险丝。
   L.push('function FindProxyForURL(url, host) {');
   L.push('  host = (host || "").toLowerCase();');
-  L.push('  // 本机与局域网名字直连');
+  L.push('  // local / LAN names: direct');
   L.push('  if (isPlainHostName(host) || host === "localhost" || host === "127.0.0.1") return "DIRECT";');
-  L.push('  // 碧蓝幻想资源 CDN：整个域名交给本地缓存代理（日语树与英语树都用 CDN）');
+  L.push('  // GBF asset CDN (JP & EN trees): whole domain via local cache proxy');
   L.push('  if (/granbluefantasy[.]akamaized[.]net$/.test(host) || /gbf[.]akamaized[.]net$/.test(host)) {');
   L.push('    return "PROXY ' + HOST + ':' + PROXY_PORT + '; DIRECT";');
   L.push('  }');
-  L.push('  // 游戏本站：只有素材路径走缓存（日语 /assets/、英语 /assets_en/）；接口直连（过代理会触发上游 RST，实测）');
+  L.push('  // game site: only asset paths (/assets/, /assets_en/) via cache; API must stay direct (upstream RST)');
   L.push('  if (/granbluefantasy[.]jp$/.test(host) && /\\/assets(?:_[a-z]{2})?\\//.test(url)) {');
   L.push('    return "PROXY ' + HOST + ':' + PROXY_PORT + '; DIRECT";');
   L.push('  }');
@@ -449,18 +453,23 @@ function buildPac(s) {
     // 不 await：这里是响应 /proxy.pac 的路径，绝不能被探测拖住。
     refreshChainLiveness(chain).catch(() => {});
   }
+  const asciiOnly = (x) => String(x).replace(/[^\x20-\x7E]/g, '');
   if (verdict.chain) {
-    L.push('  // 其余流量交回 VPN/加速器的本地代理（连不上自动回直连）');
+    L.push('  // everything else: hand to VPN/accelerator local proxy (DIRECT fallback)');
     L.push('  return "PROXY ' + chain + '; DIRECT";');
   } else if (chain) {
     // 已知探不通：直接直连，别再给每个新域名加一次连接拒绝（原清单 P1-6）
-    L.push('  // 本机代理 ' + chain + ' 已探明探不通（' + (chainLiveness.error || '') + '），直接直连');
+    L.push('  // local proxy ' + chain + ' known unreachable (' + asciiOnly(chainLiveness.error || '') + '), DIRECT');
     L.push('  return "DIRECT";');
   } else {
     L.push('  return "DIRECT";');
   }
   L.push('}');
-  return L.join(String.fromCharCode(10));
+  const pac = L.join(String.fromCharCode(10));
+  // 保险丝：任何路径混进非 ASCII 都在这里去掉并留痕，宁可丢一个注释也不丢整份 PAC。
+  const safe = pac.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
+  if (safe !== pac) log('[PAC] 生成的 PAC 含非 ASCII 字符，已剥离（Chromium 的 pacScript.data 只接受 ASCII）');
+  return safe;
 }
 
 function writeAutoConfig(value) {

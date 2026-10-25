@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "碧蓝幻想本地缓存程序",
-  "version": "2.2.0",
-  "description": "让碧蓝幻想资源从本机缓存读取。v2.2.0：可随浏览器启动/退出本地缓存程序（原生消息宿主，需先运行 register-native-host.ps1 注册；未注册时静默退回手动模式，行为与旧版一致）。",
+  "version": "2.2.1",
+  "description": "让碧蓝幻想资源从本机缓存读取。v2.2.1：拉取服务端 PAC 时剔除注释并保证纯 ASCII（Chromium 的 pacScript.data 拒绝非 ASCII，旧版因此静默失败只剩兜底）；v2.2.0：可随浏览器启动/退出本地缓存程序（原生消息宿主，需先运行 register-native-host.ps1 注册）。",
   "minimum_chrome_version": "114",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq1NC0gA9ZT6lahi6D0Yx3rryhPqYiDR064Lxq5PsHdBDOOqrzOcCTEMV6k5MOns1BQpG+oyZjtmg1iJJqEniku3F6tKIw4BaRgpwABx8zPg2zQXJ+SAVsUfO9eIrnpjfhZe2KvH0OeOFr/cJ7ZMFB5EZZJNQ22fzYvZzvVkt+uvOi41CRjJNouu7uY0F5edK+X0shfinW2jHXaW59Uqp3/bLhJ46D+ZAMFd39omXT1++SgBbJQKqxqkP967R3UgHYbD1K2wmtEWVNNpuZO0zlXmpqIkq+LEAj7DwdPN0UVLbYTEF9z+RQsAH8BpiBxqFLc0y/I0k1TRK8CGNjl8sHwIDAQAB",
   "permissions": [

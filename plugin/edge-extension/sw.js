@@ -51,8 +51,20 @@ async function currentPac() {
   try {
     const r = await fetch(SERVER_PAC_URL, { cache: 'no-store' });
     if (r.ok) {
-      const t = await r.text();
-      if (t.indexOf('FindProxyForURL') !== -1) return t;
+      let t = await r.text();
+      if (t.indexOf('FindProxyForURL') !== -1) {
+        // 【v2.2.1】Chromium 的 pacScript.data 只接受纯 ASCII（2026-10-25 实测：带中文
+        // 注释的服务端 PAC 被整单拒绝，报 "'pacScript.data' supports only ASCII code"，
+        // 浏览器里就只剩兜底 PAC）。V4.23.0 及之前的服务端发的 PAC 带中文注释行 ——
+        // 这里整行剔除注释（生成器里的注释全部是整行 // 开头），再做一道 ASCII 保险丝。
+        // 两道都过了才交给 set，新旧服务端通吃。
+        const NL = String.fromCharCode(10);
+        t = t.split(NL)
+          .filter(function (ln) { return !/^\s*\/\//.test(ln); })
+          .join(NL)
+          .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
+        if (t.indexOf('FindProxyForURL') !== -1) return t;
+      }
     }
   } catch (e) { /* 服务不在线，用兜底 */ }
   return null;
