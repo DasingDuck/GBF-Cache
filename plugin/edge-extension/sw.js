@@ -116,6 +116,55 @@ function ensureAlarm() {
   catch (e) { /* 极旧内核不支持时静默降级为仅事件驱动 */ }
 }
 
+// ====================== 跟随浏览器启动/退出（v2.2.0，配合程序 V4.23.0） ======================
+//
+// 机制：Chromium 的「原生消息宿主」。register-native-host.ps1 在注册表里登记
+// com.dasingduck.gbfcache 指向 GBFCache.exe 后，这里的 connectNative 一调用，
+// 浏览器就替我们把程序拉起来（stdin/stdout 接管道）；浏览器退出时会终止宿主进程，
+// 程序跟着退 —— 这就是「跟随浏览器开启/关闭」的全部实现。
+//
+// 扩展端只做三件事，刻意的极简：
+//   1) SW 每次醒来（浏览器启动 / 每分钟 alarm）都确保原生端口连着；
+//   2) 端口断开时分两种情况：宿主没注册（等下一轮 alarm 再试，不刷错误）/
+//      宿主进程退了（先探活 —— 服务若被手动启动的实例接管就不抢，真没了才重连）；
+//   3) 端口上不发送任何消息 —— 端口的存在本身就是「浏览器还活着，服务别退」的信号，
+//      服务端（launcher 的原生宿主模式）也只认这个信号。
+// 端口保持连接同时能让 SW 不被 30 秒空闲规则杀掉（Chrome 105+ 的官方行为，
+// minimum_chrome_version 已提到 114），每分钟的 alarm 是兜底唤醒源。
+const NATIVE_HOST = 'com.dasingduck.gbfcache';
+const HEALTH_URL = 'http://127.0.0.1:8799/health';
+let nativePort = null;
+
+function ensureNative() {
+  if (nativePort) return;
+  if (!chrome.runtime || !chrome.runtime.connectNative) return;   // 极旧内核：静默降级
+  try {
+    const p = chrome.runtime.connectNative(NATIVE_HOST);
+    p.onDisconnect.addListener(function () {
+      nativePort = null;
+      // lastError 必须读取（不读会报 Unchecked runtime.lastError）；它同时是
+      // 「宿主没注册」与「宿主进程退出」的判别依据。
+      const err = chrome.runtime.lastError;
+      const msg = String((err && err.message) || '');
+      console.info('[碧蓝幻想本地缓存] 原生宿主断开：' + (msg || '宿主进程退出/浏览器关闭'));
+      if (msg.indexOf('not found') !== -1) {
+        // 宿主没注册（register-native-host.ps1 没跑过/已注销）：不进入重试环，
+        // 每分钟的 alarm 会再调 ensureNative，注册后自然接上。
+        return;
+      }
+      // 宿主进程退了：4 秒后探活再决定。服务若已被手动启动的实例接管（双击 exe 的
+      // 那份在跑），就不重连 —— 否则用户手动关掉服务，浏览器会立刻把它拉回来。
+      setTimeout(function () {
+        fetch(HEALTH_URL, { cache: 'no-store' })
+          .then(function () { /* 服务活着：交给现有实例 */ })
+          .catch(function () { ensureNative(); });
+      }, 4000);
+    });
+    nativePort = p;
+    console.info('[碧蓝幻想本地缓存] 原生宿主已连接：' + NATIVE_HOST);
+  } catch (e) { /* 静默 */ }
+}
+
 async function apply() {
   if (applying) return;
   applying = true;
@@ -157,9 +206,10 @@ async function apply() {
   applying = false;
 }
 
-chrome.runtime.onInstalled.addListener(apply);
-chrome.runtime.onStartup.addListener(apply);
+chrome.runtime.onInstalled.addListener(function () { apply(); ensureNative(); });
+chrome.runtime.onStartup.addListener(function () { apply(); ensureNative(); });
 chrome.alarms.onAlarm.addListener(function (a) {
-  if (a && a.name === ALARM_NAME) apply();
+  if (a && a.name === ALARM_NAME) { apply(); ensureNative(); }
 });
 apply();
+ensureNative();
