@@ -121,6 +121,7 @@
   .status{font-size:12.5px;display:inline-flex;align-items:center;color:var(--dim);
     background:var(--panel2);border:1px solid var(--line);border-radius:999px;
     padding:3px 11px 3px 10px;box-shadow:var(--inner)}
+  #upstreamTxt{font-variant-numeric:tabular-nums;white-space:nowrap}
 
   /* 主体。V4.8.6：回到"正常文档流 + 每行等宽列"的常规布局。
      ─────────────────────────────────────────────────────────────
@@ -822,6 +823,9 @@ try{
   <div class="status" style="margin-right:18px">
     <span class="dot idle" id="extDot"></span><span id="extTxt">检测中…</span>
   </div>
+  <div class="status" id="upstreamStatus" title="正在读取实际上游代理">
+    <span class="dot idle" id="upstreamDot"></span><span id="upstreamTxt">上游 —</span>
+  </div>
   <div class="status"><span class="dot idle" id="liveDot"></span><span id="liveTxt">连接中</span></div>
   <button id="btnSideMenu" class="gear" title="菜单" onclick="toggleSideMenu(true)">☰</button>
   <button id="btnSettings" class="gear" title="功能设置" onclick="toggleSettings(event)">⚙ 设置</button>
@@ -846,6 +850,10 @@ try{
     <div class="setRow"><span class="setName" title="开启状态只预热过户旧文件不下载新文件，关闭状态预热同时下载发现的新文件。">预热只过户、不预下载</span><button class="switch" id="swMigrateOnly" onclick="setFeature('prewarmMigrateOnly', this)" aria-checked="false"></button></div>
     <div class="setRow"><span class="setName" title="自动清掉用不到的旧版本资源，腾出磁盘空间。">自动清理过期版本戳</span><button class="switch" id="swAutoEvict" onclick="setFeature('autoEvictStamps', this)" aria-checked="false"></button></div>
     <div class="setRow"><span class="setName" title="游戏更新开始与完成时，在托盘弹一条提醒。">游戏更新提醒气泡</span><button class="switch" id="swNotify" onclick="setFeature('prewarmNotify', this)" aria-checked="false"></button></div>
+    <div class="setGroup">回源代理</div>
+    <div class="setRow"><span class="setName" title="开启后固定使用下面的 HTTP 本地代理回源，不再自动探测其他加速器代理。">手动指定上游代理（仅 HTTP）</span><button class="switch" id="swManualUpstream" onclick="toggleManualUpstream(this)" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName">上游端口（127.0.0.1）</span><span style="display:flex;align-items:center;gap:6px;min-width:0"><input id="manualUpstreamPort" type="number" min="1" max="65535" inputmode="numeric" placeholder="例如 8099" style="width:92px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font:12px Consolas,monospace"><button class="mini" id="btnManualUpstreamSave" onclick="saveManualUpstreamPort()">应用</button></span></div>
+    <div class="setRow" id="manualUpstreamHintRow" style="padding:0 0 2px"><span class="muted" id="manualUpstreamHint" style="font-size:11.5px;line-height:1.5">关闭时保持现有自动探测。</span></div>
     <div class="setRow"><span class="setName">缓存功能<span class="muted" id="cacheStateNote"></span></span><button class="switch" id="btnBypass" onclick="togglePacBypass(this)" aria-checked="false"></button></div>
     <div class="setGroup">悬浮窗</div>
     <div class="setRow"><span class="setName">关控制台后显示悬浮窗</span><button class="switch" id="tglFloat" onclick="toggleFloat()" aria-checked="false"></button><button class="mini" id="btnFloatNow" onclick="toggleFloatNow()">立即显示</button></div>
@@ -947,7 +955,7 @@ try{
       <div class="btns" style="margin-top:10px">
         <button onclick="clearLogView()">清空显示</button>
         <button onclick="toggleFollow(this)" data-follow="1" class="primary">暂停滚动</button>
-        <button id="btnSelfTestLog" onclick="runSelfTest()">运行自检</button>
+        <button id="btnSelfTestLog" onclick="runSelfTest(this)">运行自检</button>
       </div>
     </div>
 
@@ -1125,7 +1133,7 @@ try{
       <button onclick="testCycle()" id="btnCycle">测试完整缓存</button>
       <span class="sideMaintLabel">接管与页面</span>
       <button onclick="probeExtension()">重新检测接管</button>
-      <a class="btn" href="/test" target="_blank">打开自检页</a>
+      <button onclick="runSelfTest(this)">打开自检页</button>
       <a class="btn maintWide" href="/health" target="_blank">原始数据</a>
     </div>
     <div id="checkupRows" style="font-size:12.5px;color:var(--fg2)"></div>
@@ -1212,6 +1220,8 @@ var extOk = null;          // null=未知, true=代理在接管, false=未接管
 var proxyMode = 'system';
 var sysInstalled = false;   // 系统槽位当前是否由本程序接管（注册表事实，/api/stats 下发）
 var proxyLastRequestAt = 0;
+var lastSystemProxy = null;
+var lastUpstreamProbe = null;
 
 function takeoverState() {
   if (proxyMode === 'off') return 'off';
@@ -1222,6 +1232,32 @@ function takeoverState() {
   if (extOk === true) return 'ok';
   if (extOk === false) return 'okprobe';
   return 'unknown';
+}
+
+function renderUpstreamStatus() {
+  var p = lastSystemProxy || {};
+  var probe = lastUpstreamProbe || {};
+  var addr = (probe.active && probe.proxy) || p.upstream || '';
+  var liveness = probe.liveness || {};
+  var dead = !!(p.upstreamDead || liveness.alive === false);
+  var portMatch = /:(\d+)$/.exec(addr);
+  var port = portMatch ? portMatch[1] : addr;
+  var dot = $('upstreamDot');
+  var txt = $('upstreamTxt');
+  var box = $('upstreamStatus');
+  if (!dot || !txt || !box) return;
+
+  if (!addr) {
+    dot.className = 'dot idle';
+    txt.textContent = '上游 直连';
+    box.title = '没有可用的上游代理，未命中资源将直接回源';
+    return;
+  }
+  dot.className = 'dot ' + (dead ? 'off' : 'on');
+  txt.textContent = dead ? '上游 ' + port + ' 失败' : '上游 ' + port;
+  var source = probe.from || p.upstreamFrom || '';
+  box.title = '实际回源上游：' + addr + (source ? '（来源：' + source + '）' : '')
+    + (dead ? '，当前检测不可用' : '');
 }
 
 /* ---------------- 根证书位置提示（V4.3.5 新增） ----------------
@@ -1455,7 +1491,10 @@ function renderStats(d) {
   if (d.cache) renderCache(d.cache);
   renderSources(d);
   renderEvict(d);
+  if (d.systemProxy) lastSystemProxy = d.systemProxy;
+  if (d.upstreamProbe) lastUpstreamProbe = d.upstreamProbe;
   if (d.systemProxy) renderSystemProxy(d.systemProxy, d.upstreamProbe);
+  if (lastSystemProxy || lastUpstreamProbe) renderUpstreamStatus();
   renderExtBadge();          // 徽章也跟着轮询刷新，免得和上方横幅说法不一致
   renderErrors(d.recentErrors || []);
 }
@@ -2117,8 +2156,19 @@ function rescan() {
     setTimeout(function () { b.disabled = false; b.textContent = '重新扫描'; }, 1500);
   });
 }
-function runSelfTest() {
-  window.open('/test', '_blank');
+function runSelfTest(btn) {
+  var old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '打开中…'; }
+  fetch('/api/open-self-test', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+      if (!d.ok) alert('打开自检页失败：' + (d.error || '未知错误'));
+    })
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+      alert('打开自检页失败：' + e.message);
+    });
 }
 
 /* ---------------- 按类型清理缓存 ---------------- */
@@ -2695,10 +2745,102 @@ function renderSettings(s) {
   setSwitch('swAutoEvict', s.autoEvictStamps);
   setSwitch('swNotify', s.prewarmNotify);
   setSwitch('btnBypass', s.cacheEnabled);
+  renderManualUpstream(s);
   var note = $('cacheStateNote');
   if (note) note.textContent = s.cacheEnabled ? '' : '（暂停中）';
   setSwitch('tglFloat', s.floatOnConsoleClose);
   setSwitch('swLightTheme', document.body.classList.contains('light'));   // 主题是本浏览器偏好，随面板刷新保持同步
+}
+
+/* 手动 HTTP 上游代理：开启时只使用 127.0.0.1:<port>，关闭时恢复自动探测。 */
+var manualUpstreamEnabled = false;
+
+function manualUpstreamPort() {
+  var el = $('manualUpstreamPort');
+  var raw = el ? String(el.value || '').trim() : '';
+  if (!/^\d+$/.test(raw)) return null;
+  var port = parseInt(raw, 10);
+  return port >= 1 && port <= 65535 ? port : null;
+}
+
+function showManualUpstreamHint(msg, bad) {
+  var el = $('manualUpstreamHint');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = bad ? 'var(--err)' : '';
+}
+
+function renderManualUpstream(s) {
+  manualUpstreamEnabled = !!s.manualUpstreamEnabled;
+  setSwitch('swManualUpstream', manualUpstreamEnabled);
+  var input = $('manualUpstreamPort');
+  if (input && document.activeElement !== input && s.manualUpstreamPort) {
+    input.value = s.manualUpstreamPort;
+  }
+  var probeBtn = $('btnProbeUp');
+  if (probeBtn) {
+    probeBtn.disabled = manualUpstreamEnabled;
+    probeBtn.title = manualUpstreamEnabled ? '手动上游代理开启时不运行自动探测' : '';
+  }
+  if (manualUpstreamEnabled && s.manualUpstreamPort) {
+    showManualUpstreamHint('已开启：固定使用 HTTP 127.0.0.1:' + s.manualUpstreamPort + ' 回源，不再自动选择其他代理。', false);
+  } else if (s.manualUpstreamPort) {
+    showManualUpstreamHint('已关闭：保持自动检测；端口 ' + s.manualUpstreamPort + ' 已记住。', false);
+  } else {
+    showManualUpstreamHint('关闭时保持现有自动探测；填写端口后可开启。', false);
+  }
+}
+
+function setManualUpstream(enabled, port) {
+  var btn = $('swManualUpstream');
+  var save = $('btnManualUpstreamSave');
+  if (btn) btn.disabled = true;
+  if (save) save.disabled = true;
+  var q = '/api/set-manual-upstream?enabled=' + (enabled ? '1' : '0');
+  if (port) q += '&port=' + encodeURIComponent(port);
+  fetch(q, { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) btn.disabled = false;
+      if (save) save.disabled = false;
+      if (!d.ok) {
+        if (btn) setSwitch('swManualUpstream', manualUpstreamEnabled);
+        showManualUpstreamHint(d.error || '保存失败', true);
+        return;
+      }
+      renderManualUpstream(d.settings || {});
+    })
+    .catch(function (e) {
+      if (btn) btn.disabled = false;
+      if (save) save.disabled = false;
+      if (btn) setSwitch('swManualUpstream', manualUpstreamEnabled);
+      showManualUpstreamHint('保存失败：' + e.message, true);
+    });
+}
+
+function toggleManualUpstream(btn) {
+  var enable = btn.getAttribute('aria-checked') !== 'true';
+  if (!enable) {
+    setManualUpstream(false, null);
+    return;
+  }
+  var port = manualUpstreamPort();
+  if (!port) {
+    showManualUpstreamHint('请先填写 1~65535 的端口，再开启手动上游代理。', true);
+    var input = $('manualUpstreamPort');
+    if (input) input.focus();
+    return;
+  }
+  setManualUpstream(true, port);
+}
+
+function saveManualUpstreamPort() {
+  var port = manualUpstreamPort();
+  if (!port) {
+    showManualUpstreamHint('上游代理端口必须是 1~65535 的整数。', true);
+    return;
+  }
+  setManualUpstream(manualUpstreamEnabled, port);
 }
 
 /* 控制台浏览器（V4.21.0）：空 = 默认（优先 Edge 应用模式）。

@@ -251,7 +251,17 @@ try {
 
     function Open-SelfTest {
         if (-not (Test-Server)) { Start-Server | Out-Null }
-        Start-Process ($BaseUrl + 'test')
+        try {
+            $r = Invoke-RestMethod -Uri ($BaseUrl + 'api/open-self-test') -Method Post -TimeoutSec 8
+            if (-not $r.ok) {
+                $why = if ($r.error) { [string]$r.error } else { '未知错误' }
+                [System.Windows.Forms.MessageBox]::Show('打开自检页失败：' + $why,
+                    'GBFCache', 'OK', 'Warning') | Out-Null
+            }
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show('无法打开自检页：' + $_.Exception.Message,
+                'GBFCache', 'OK', 'Warning') | Out-Null
+        }
     }
 
     function Open-CacheDir {

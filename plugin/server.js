@@ -1065,21 +1065,14 @@ function currentUpstreamProxy() {
   const manual = envVal || cfgVal;
   const m = /^([\w.\-]+):(\d+)$/.exec(manual);
   if (m) {
-    // V4.20.5：配置口（config.json / 环境变量）也要过存活判定 —— 上面那段注释写的正是
-    // "同一个判定，探明不通就跳过"，但这条分支当初漏了它：加速器关了、端口还留在配置里时，
-    // 回源每隔 60 秒白啃一次死端口（chainFailUntil 只兜 60 秒），面板还照报"经加速器"。
-    // 探明不通就不返回 —— 自然落到后面的系统代理 / accelProxy / 自动探测 / 直连，
-    // 且 checkUpstreamHealth 的自动探测路径随之重新启用（加速器再开起来能被重新发现）。
-    if (shouldChainTo(manual, chainLiveness).chain) {
-      return { host: m[1], port: parseInt(m[2], 10), from: envVal ? '环境变量' : 'config.json' };
-    }
+    // 手动指定是明确选择：即使端口暂时没起来，也不能回落到自动探测改用别的代理。
+    // 因此这里不做存活判定；checkUpstreamHealth 看到非“自动探测”来源时也不会替换它。
+    return { host: m[1], port: parseInt(m[2], 10), from: envVal ? '环境变量' : 'config.json' };
   }
   const s = systemProxyCache.value;
   if (s && s.upstream) {
     const n = /^([\w.\-]+):(\d+)$/.exec(s.upstream);
-    // V4.20.5：这条分支同样要过存活判定 —— config.json 的 upstreamProxy 会被并进系统缓存
-    // （upstreamFrom=config，见 systemProxyInfo 的 upstream 字段），漏了它等于漏了用户实际
-    // 在用的那个字段：加速器关了仍会每隔 60 秒去啃一次死端口、面板照报"经它"。
+    // 非手填的系统/加速器候选仍要过存活判定，探明不通时允许继续尝试其他来源。
     if (n && shouldChainTo(s.upstream, chainLiveness).chain) {
       return { host: n[1], port: parseInt(n[2], 10), from: s.upstreamFrom === 'config' ? 'config.json' : '系统代理设置' };
     }
@@ -3072,6 +3065,23 @@ function log(...a) {
   logToFile(`[${new Date().toISOString()}] ${text}`);
 }
 
+// Node 默认只信任随运行时打包的 CA。岛风GO 等本地加速器会安装自己的
+// Windows 根证书并代理 CDN，因此把系统证书库合并进默认信任链。
+function trustSystemCertificateAuthorities() {
+  try {
+    if (typeof tls.getCACertificates !== 'function' || typeof tls.setDefaultCACertificates !== 'function') {
+      log('[TLS] 当前 Node 不支持系统根证书合并，继续使用内置 CA');
+      return;
+    }
+    const bundled = tls.getCACertificates('bundled');
+    const system = tls.getCACertificates('system');
+    tls.setDefaultCACertificates([...bundled, ...system]);
+    log(`[TLS] 已合并系统根证书（内置 ${bundled.length}，系统 ${system.length}）`);
+  } catch (e) {
+    log('[TLS] 合并系统根证书失败，继续使用内置 CA：' + ((e && e.message) || e));
+  }
+}
+
 // 把 URL 路径映射为缓存文件路径（复刻原程序：仅替换分隔符）
 // 原程序只按路径做键、不区分主机；这里对非 GBF 主机额外分目录，避免不同域同名文件互相覆盖。
 // 碧蓝幻想的资源实际来自两个域：
@@ -4851,6 +4861,42 @@ async function handle(req, res) {
     }
   }
 
+  // 自检统一由服务端启动：使用“启动游戏”的目标程序，而不是当前控制台所在的浏览器。
+  // 这样从 Chrome/其他浏览器或托盘进入控制台时，真正跑 GBF 的浏览器仍是唯一的自检环境。
+  if (rawUrl === '/api/open-self-test' && req.method === 'POST') {
+    const selfTestUrl = `http://${HOST}:${PORT}/test`;
+    const exe = gameLaunchPath();
+    if (exe) {
+      if (!fs.existsSync(exe)) {
+        return send(res, 400, { 'Content-Type': 'application/json' }, JSON.stringify({
+          ok: false, code: 'BAD_PATH',
+          error: '找不到游戏浏览器（路径不存在或已移动）：' + exe
+            + '　—— 可在「启动游戏」旁的 ⚙ 里重新选择',
+        }));
+      }
+      launchExeViaShell(exe, [selfTestUrl], (result) => {
+        log('[控制台] 打开自检页（游戏浏览器 ' + exe + '）：'
+          + (result.ok ? (result.pending ? '已交给系统，可能在等 UAC 确认' : '成功') : '失败：' + result.error));
+        send(res, 200, { 'Content-Type': 'application/json' },
+          JSON.stringify(Object.assign({ target: 'game-browser', program: exe }, result)));
+      });
+      return;
+    }
+    try {
+      const { spawn } = require('child_process');
+      const cp = spawn('rundll32', ['url.dll,FileProtocolHandler', selfTestUrl],
+        { detached: true, stdio: 'ignore' });
+      cp.on('error', () => { /* 防 Unhandled 'error' 崩掉服务 */ });
+      cp.unref();
+      log('[控制台] 打开自检页（未配置游戏浏览器，使用系统默认浏览器）');
+      return send(res, 200, { 'Content-Type': 'application/json' },
+        JSON.stringify({ ok: true, target: 'default' }));
+    } catch (e) {
+      log(`[控制台] 打开自检页失败：${e.message}`);
+      return send(res, 500, { 'Content-Type': 'application/json' }, JSON.stringify({ ok: false, error: e.message }));
+    }
+  }
+
   // 切换开机自启相关开关：游戏（enabled）、启动目标（target）、加速器（accel）。
   // 例：POST /api/set-auto-launch?target=default   POST /api/set-auto-launch?enabled=0
   //     POST /api/set-auto-launch?accel=0
@@ -5346,6 +5392,12 @@ async function handle(req, res) {
   }
 
   function settingsState() {
+    const manualUpstream = String(config.upstreamProxy || '').trim();
+    const manualPortMatch = /^(?:127\.0\.0\.1|localhost):(\d+)$/i.exec(manualUpstream);
+    const savedPort = parseInt(config.manualUpstreamPort, 10);
+    const manualPort = manualPortMatch
+      ? parseInt(manualPortMatch[1], 10)
+      : (savedPort >= 1 && savedPort <= 65535 ? savedPort : null);
     return {
       prewarmEnabled: config.prewarmEnabled === true,   // V4.24.1：默认积极档（loadConfig 后归一为 true）
       followEnabled: config.followEnabled !== false,    // 跟随式小预热：默认开
@@ -5358,6 +5410,8 @@ async function handle(req, res) {
       autoLaunchAccel: config.autoLaunchAccel !== false,
       floatOnConsoleClose: config.floatOnConsoleClose !== false,
       cacheEnabled: !pacBypass,
+      manualUpstreamEnabled: !!manualUpstream,
+      manualUpstreamPort: manualPort,
       autoStartWithWindows: null,   // GET 端点会用注册表实况补上（查询要起子进程，不跟着轮询跑）
     };
   }
@@ -5367,6 +5421,44 @@ async function handle(req, res) {
     st.autoStartWithWindows = await autoStartState();
     return send(res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
       JSON.stringify({ ok: true, settings: st }));
+  }
+
+  // 手动 HTTP 上游代理：固定 127.0.0.1，只开放端口配置。
+  // 开启时复用既有 upstreamProxy 字段，现有 PAC/回源/检查链路无需第二套语义；
+  // 关闭时清空该字段并恢复原来的自动探测。
+  if (rawUrl.startsWith('/api/set-manual-upstream') && req.method === 'POST') {
+    let enabled = null;
+    let port = NaN;
+    try {
+      const u = new URL('http://x' + rawUrl);
+      enabled = u.searchParams.get('enabled') === '1'
+        ? true
+        : (u.searchParams.get('enabled') === '0' ? false : null);
+      const rawPort = u.searchParams.get('port') || '';
+      if (/^\d+$/.test(rawPort)) port = parseInt(rawPort, 10);
+    } catch { /* 下面统一报参数错误 */ }
+    const fail = (error) => send(res, 400,
+      { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+      JSON.stringify({ ok: false, error }));
+    if (enabled === null) return fail('缺 enabled 参数（1 / 0）');
+    if (enabled && !(port >= 1 && port <= 65535)) return fail('上游代理端口必须是 1~65535 的整数');
+
+    const patch = enabled
+      ? { upstreamProxy: '127.0.0.1:' + port, manualUpstreamPort: port }
+      : { upstreamProxy: '' };
+    if (!enabled && port >= 1 && port <= 65535) patch.manualUpstreamPort = port;
+    saveConfig(patch);
+    detectedUpstream = null;
+    chainFailUntil = 0;
+    chainWarned = false;
+    try { dropIdleSockets(chainAgentCache.agent); } catch { /* 没有旧连接池 */ }
+    chainAgentCache = { key: '', agent: null };
+    chainLiveness = { key: '', alive: null, at: 0, error: '' };
+    await readSystemProxyAsync(true).catch(() => { /* 状态刷新失败不影响配置已保存 */ });
+    log('[设置] 手动上游代理 = '
+      + (enabled ? 'HTTP 127.0.0.1:' + port : '关（恢复自动检测）'));
+    return send(res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+      JSON.stringify({ ok: true, settings: settingsState() }));
   }
 
   if (rawUrl.startsWith('/api/set-feature') && req.method === 'POST') {
@@ -6597,6 +6689,8 @@ function openDashboard() {
 }
 
 function main() {
+  trustSystemCertificateAuthorities();
+
   // 全局兜底（V4.14.5）：漏网的同步异常 / Promise 拒绝只记日志、不退出 —— 这是常驻代理，
   // 「扔掉一个请求」永远好过「整个服务带着游戏一起消失」。各请求路径已有 .catch，
   // 这里接的是定时器与回调里漏网的那类；日志进文件，便于事后定位是哪一处漏了。
