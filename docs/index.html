@@ -298,7 +298,7 @@
     </ol>
     <div class="note-card">
       <svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M12 8.6v5m0 3.2h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
-      <p><b>退出请用托盘菜单里的「退出」，不要强行结束进程。</b>程序启动时会接管一次系统里的上网设置，优雅退出才会把它还原回去。</p>
+      <p><b>代理行为可选。</b>全局模式接管系统 PAC；主动模式只给由「启动游戏」打开的 GBF 浏览器注入代理；被动模式完全由你手动设置浏览器代理。</p>
     </div>
         </article>
         <article class="g-panel" id="features" data-panel="features">
@@ -316,7 +316,7 @@
       <article class="feat">
         <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
         <h3>只碰资源，不碰账号</h3>
-        <p>只接管 <code>/assets/</code> 的 GET/HEAD；登录、抽卡等 <code>/rest/ /ob/ /od/</code> 接口一律直连，<code>/user/</code> 绝不拦截。</p>
+        <p>只缓存 <code>/assets/</code> 的 GET/HEAD；登录、抽卡等 <code>/rest/ /ob/ /od/</code> 接口只透明转发，<code>/user/</code> 绝不拦截。</p>
       </article>
       <article class="feat">
         <span class="feat-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5M12 7.5V12l3 2M16 3.5h4.5V8"/></svg></span>
@@ -360,11 +360,11 @@
       </details>
       <details>
         <summary>会不会影响我电脑上的别的东西？</summary>
-        <p>程序只在你自己的电脑内部工作，不对外开放任何东西。它启动时会接管一次你系统里的上网设置，所以退出时请用它托盘菜单里的「退出」，不要强行结束它 —— 那样设置可能不会还原回来。</p>
+        <p>程序只在你自己的电脑内部工作，不对外开放任何东西。全局模式会接管系统 PAC 并在退出时还原；主动模式只给本程序启动的 GBF 浏览器注入代理；被动模式不接管任何程序。</p>
       </details>
       <details>
         <summary>为什么「缓存命中」不涨？</summary>
-        <p>先看控制台顶部的状态提示。常见原因有两个：一是浏览器还在用它自己的缓存，没有把请求交给本程序（重启浏览器即可）；二是系统里的「自动配置脚本」没有指向本程序，控制台里可以重新检测并修复。</p>
+        <p>先看控制台顶部的状态提示。被动模式下需要手动把浏览器 HTTP/HTTPS 代理设置为设置页显示的本地端口；主动模式下 Chromium 会忽略已运行实例后来传入的代理参数，请完全退出 GBF 浏览器后再点「启动游戏」；全局模式则检查系统 PAC 是否已由本程序接管。</p>
       </details>
       <details>
         <summary>兼容什么加速器？</summary>

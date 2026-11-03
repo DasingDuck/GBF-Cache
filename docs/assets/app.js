@@ -155,7 +155,7 @@
     hit: {
       steps: [
         { r: 'b2p', ms: 340, color: '--info',
-          say: '<span class="tag info">请求</span>浏览器把资源请求交给本程序（系统里的「自动配置脚本」按域名分流）。',
+          say: '<span class="tag info">请求</span>浏览器把资源请求交给本程序（全局模式走系统 PAC，主动模式由启动参数注入，被动模式由用户手动配置代理）。',
           arrive: { flash: 'n_proxy' } },
         { r: 'p2c', ms: 300, color: '--ok',
           say: '<span class="tag ok">查本地</span>磁盘上已经有这份文件 → <b>直接读盘，完全不联网</b>。',
@@ -207,7 +207,7 @@
     direct: {
       steps: [
         { r: 'b2o', ms: 900, color: '--info',
-          say: '<span class="tag info">直连</span>接口请求（登录、抽卡等 <code>/rest/</code>）在浏览器里就<b>直接去了源站</b>，不经过本程序。',
+          say: '<span class="tag info">透传</span>接口请求（登录、抽卡等 <code>/rest/</code>）由本程序<b>原样转发到源站</b>，绝不缓存。',
           arrive: { flash: 'n_origin', log: { tag: 'DIRECT', path: '/rest/user/content/index', ms: '—' } } },
         { r: 'o2b', ms: 860, color: '--info',
           say: '<span class="tag info">放行</span>凡是需要 Cookie 才能正确返回的请求都走直连 —— 本程序只碰静态资源。',

@@ -6,11 +6,11 @@
  *   - 命中缓存 -> 直接读盘返回，完全不联网
  *   - 未命中   -> 回源站拉取，按既有缓存的原格式写回，然后返回
  *
- * 请求格式（由 Edge 扩展重定向产生）：
- *   GET http://127.0.0.1:8799/f/<原始主机>/<原始路径>?<原始查询>
- * 例：
- *   https://game.granbluefantasy.jp/assets/img/a.png
- *     -> http://127.0.0.1:8799/f/game.granbluefantasy.jp/assets/img/a.png
+ * 浏览器接入方式：
+ *   global  —— 恢复原作者行为，接管 Windows 系统 AutoConfigURL
+ *   active  —— 启动 GBF 浏览器时只给该实例注入本程序 PAC
+ *   passive —— 不接管任何程序，用户手动把浏览器代理指向本程序端口
+ * 只有 global 会修改系统 AutoConfigURL；其他模式会释放本程序遗留的 PAC。
  *
  * 缓存键 = URL 路径（与既有缓存的磁盘布局一致，仅替换路径分隔符）。
  * 查询串**不进缓存键**，但会当作"资源版本"记进同目录的 .ext 元数据：请求带查询串时
@@ -37,7 +37,7 @@ const HOST = '127.0.0.1';
 // 程序版本号（唯一来源）。格式 Vx.x.x：主版本.功能版本.修订号。
 // 规矩：**每次功能性改动都要同步递增**——新功能 +1 中间位，修 bug/小调整 +1 末位，
 // 架构级重构 +1 首位。改这里之后，控制台头部、/api/stats、启动日志、托盘悬停提示全部自动跟随。
-const VERSION = 'V4.24.2';
+const VERSION = 'V4.25.0';
 
 // ---------------------------------------------------------------- 缓存目录配置
 //
@@ -91,6 +91,34 @@ function loadConfig() {
 }
 
 const config = loadConfig();
+
+// 代理监听端口与代理接入模式。
+// 端口优先级：环境变量 > config.json > 默认值。环境变量保留给开发和自动化测试使用。
+// 代理行为有三种：
+//   global  —— 接管系统 AutoConfigURL，保持原作者版本的全局行为。
+//   active  —— 只给本程序启动的 GBF 浏览器注入代理参数，不碰系统/其他程序。
+//   passive —— 不接管任何程序；用户自行把浏览器代理指向本端口。
+const DEFAULT_PROXY_PORT = 8899;
+
+function parseUserPort(raw) {
+  const text = String(raw === null || raw === undefined ? '' : raw).trim();
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return n >= 1 && n <= 65535 ? n : null;
+}
+
+function normalizeProxyMode(raw) {
+  const mode = String(raw || '').trim().toLowerCase();
+  if (mode === 'global') return 'global';
+  if (mode === 'passive') return 'passive';
+  return 'active';
+}
+
+const savedProxyPort = parseUserPort(config.proxyPort);
+const envProxyPort = parseUserPort(process.env.GBFCACHE_PROXY_PORT);
+const PROXY_PORT = envProxyPort || savedProxyPort || DEFAULT_PROXY_PORT;
+const PROXY_PORT_SOURCE = envProxyPort ? 'environment' : (savedProxyPort ? 'config' : 'default');
+const proxyState = { listening: false, port: PROXY_PORT, error: '' };
 
 // V4.24.1：更新日模式默认档位由「平衡」改为「积极」——没显式配过 prewarmEnabled 的配置
 // 按积极档处理（全库预热 + 跟随预热都开）。显式选过平衡/安静的配置会写入 false，保持原样；
@@ -171,7 +199,9 @@ function extractProxyFromPac(pacUrl) {
     try {
       const { execSync } = require('child_process');
       // reg.exe 的教训同样适用于这里：整条命令交给 cmd，避免转义问题
-      text = execSync(`curl -s --max-time 3 "${u}"`, { encoding: 'utf8', timeout: 5000 });
+      text = execSync(`curl -s --max-time 3 "${u}"`, {
+        encoding: 'utf8', timeout: 5000, windowsHide: true,
+      });
     } catch (e) {
       return { proxy: null, reason: '它是本机 PAC 服务，但取不到内容（curl 失败或超时）' };
     }
@@ -288,7 +318,9 @@ function readSystemProxy(force) {
     const { execSync } = require('child_process');
     // 注意：reg.exe 不能用 execFileSync 调（libuv 的参数转义会把键名里的反斜杠吃掉，
     // 实测报「无效项名」），必须整条命令交给 cmd。
-    out = parseProxyRegText(execSync(REG_QUERY_CMD, { encoding: 'latin1', timeout: 5000 }));
+    out = parseProxyRegText(execSync(REG_QUERY_CMD, {
+      encoding: 'latin1', timeout: 5000, windowsHide: true,
+    }));
   } catch (e) {
     out = parseProxyRegText('');
     out.error = e.message;
@@ -313,7 +345,7 @@ function readSystemProxyAsync(force) {
   const { exec } = require('child_process');
   sysProxyRefreshing = true;
   systemProxyInflight = new Promise((resolve) => {
-    exec(REG_QUERY_CMD, { encoding: 'latin1', timeout: 5000 }, (err, stdout) => {
+    exec(REG_QUERY_CMD, { encoding: 'latin1', timeout: 5000, windowsHide: true }, (err, stdout) => {
       const out = parseProxyRegText(err ? '' : String(stdout || ''));
       if (err) out.error = err.message;
       resolveUpstreamFor(out);
@@ -482,9 +514,15 @@ function buildPac(s) {
 function writeAutoConfig(value) {
   const { execSync } = require('child_process');
   if (value) {
-    execSync(`reg add "${INET_SETTINGS_KEY}" /v AutoConfigURL /t REG_SZ /d "${value}" /f`, { stdio: 'ignore' });
+    execSync(`reg add "${INET_SETTINGS_KEY}" /v AutoConfigURL /t REG_SZ /d "${value}" /f`, {
+      stdio: 'ignore', windowsHide: true,
+    });
   } else {
-    try { execSync(`reg delete "${INET_SETTINGS_KEY}" /v AutoConfigURL /f`, { stdio: 'ignore' }); }
+    try {
+      execSync(`reg delete "${INET_SETTINGS_KEY}" /v AutoConfigURL /f`, {
+        stdio: 'ignore', windowsHide: true,
+      });
+    }
     catch { /* 本来就没有这个值 */ }
   }
   systemProxyCache = { at: 0, value: null };   // 置空缓存，下次读到最新值
@@ -542,7 +580,9 @@ function notePacState(sig, prev) {
   } else if (sig === 'bypass') {
     log('[系统代理] 临时直连中 —— 缓存接管已暂停（恢复：控制台「恢复缓存接管」或悬浮窗右键菜单）');
   } else if (sig.indexOf('mode:') === 0) {
-    log(`[系统代理] pacMode=${sig.slice(5)} —— 不占用系统槽位（留给加速器）；缓存接管已关闭`);
+    const mode = sig.slice(5);
+    log(`[代理] 代理行为=${mode} —— `
+      + (mode === 'global' ? '系统 PAC 当前未由本程序接管' : '不修改系统代理'));
   } else if (sig === 'paused') {
     log('[系统代理] 槽位反复被清掉，暂缓接管中（避免互相抢）');
   } else if (sig.indexOf('foreign-chain:') === 0) {
@@ -558,118 +598,98 @@ function notePacState(sig, prev) {
   }
 }
 
-// pacMode 归一化（纯函数，便于用合成数据把分支测全）。最终只认两种：
-//   system （默认）—— 占用系统「自动配置脚本」槽位，任何浏览器都走缓存
-//   off            —— 完全不接管，把槽位让给加速器/VPN
-// 历史值 browser（专用浏览器模式）曾是"不碰系统槽位，只给指定浏览器实例挂 PAC"，
-// 但 V4.3.6 移除了「用缓存模式打开浏览器」之后它已经**没有任何生效机制**：既不占系统槽位、
-// 又没有实例能被挂上 PAC，等于缓存完全不工作，而界面上还写着"请用托盘菜单打开"（菜单项已删）。
-// V4.3.7 起统一按 off 处理 —— 与它先前的槽位行为一致，不会突然改动用户的系统代理设置；
-// 调用方负责把这件事明确告诉用户，免得人在不知情的情况下"缓存莫名不生效"。
-// 无法识别的值同样按 off 处理，与归一化前「非 system 即不接管」的行为保持一致。
-// 顺带收掉一个同类隐患：配置里写成 "system "（前后带空白）时，旧写法会判定为"非 system"
-// 从而**静默不接管**，症状同样是"缓存莫名不生效"，所以这里先 trim 再比较。
-function normalizePacMode(raw) {
-  return String(raw || 'system').trim().toLowerCase() === 'system' ? 'system' : 'off';
-}
-
-async function installPacSetting() {   // V4.12.0 起为 async：注册表读取走异步版，巡检不再阻塞事件循环
-  // 「不碰系统代理」开关必须**最先**判断 —— 它在下面 off 模式那条"释放槽位"分支之前。
-  //
-  // 踩过的坑（V4.6.3 修）：这个开关过去写在 mode 分支之后，于是 pacMode=off 的实例照样会走到
-  // "若槽位是我们的就还回去"那一步，把**正在运行的正式实例**的接管清掉。
-  // 而构建自测实例正是 pacMode=off：实测跑一次 do-all，开发机上正式实例的 PAC 槽位就被清空，
-  // 它随后触发"槽位反复被清掉，暂缓接管（10 分钟）"的避让保护 —— 表现是**缓存整个不生效**，
-  // 而日志里只有一句避让提示，很难联想到"刚才跑了一次构建"。
+// global 模式恢复原作者的全局接管行为；active/passive 只清理本程序自己的旧 PAC。
+async function installPacSetting() {
   if (process.env.GBFCACHE_NO_PAC === '1') {
-    foreignPac = null;
     notePacState('disabled');
     return false;
   }
-  // 临时直连（V4.14.9）：必须排在 pacMode 判断之前 —— 它优先于一切接管形态。
-  // 只在"槽位还在我们手里"时动手释放；让位期间加速器若写入了自己的 PAC，绝不去碰。
-  // 20 秒巡检也会反复走到这里 —— 幂等（槽位不是我们的就什么都不做），不会来回抢。
+  foreignPac = null;
+
+  const mode = normalizeProxyMode(config.proxyMode);
+  if (mode !== 'global') {
+    const cur = await readSystemProxyAsync(true);
+    let released = !isOurPacUrl(cur.autoConfig);
+    if (isOurPacUrl(cur.autoConfig)) {
+      const p = config.pacPrev;
+      try {
+        if (p && p.existed && p.value) {
+          writeAutoConfig(p.value);
+          log(`[系统代理] 已释放旧版遗留槽位并还原为：${p.value}`);
+        } else {
+          writeAutoConfig('');
+          log('[系统代理] 已释放旧版遗留槽位');
+        }
+        released = true;
+      } catch (e) {
+        log(`[系统代理] 释放旧版遗留槽位失败：${e.message}`);
+      }
+    }
+    // 下一次切回 global 时重新记录当时的系统 PAC，避免沿用已经还原过的旧值。
+    if (released && config.pacPrev) saveConfig({ pacPrev: null });
+    notePacState('mode:' + mode);
+    return false;
+  }
+
+  // 临时暂停缓存：只要槽位仍属于本程序，就还原/释放它。
   if (pacBypass) {
     const cur = await readSystemProxyAsync(true);
     if (isOurPacUrl(cur.autoConfig)) {
+      const p = config.pacPrev;
       try {
-        const p = config.pacPrev;
-        if (p && p.existed && p.value) { writeAutoConfig(p.value); log(`[系统代理] 临时直连：槽位已还原为 ${p.value}`); }
-        else { writeAutoConfig(''); log('[系统代理] 临时直连：已释放系统槽位'); }
-      } catch (e) { log(`[系统代理] 临时直连：释放槽位失败 ${e.message}`); }
+        if (p && p.existed && p.value) {
+          writeAutoConfig(p.value);
+          log(`[系统代理] 缓存暂停：槽位已还原为 ${p.value}`);
+        } else {
+          writeAutoConfig('');
+          log('[系统代理] 缓存暂停：已释放系统槽位');
+        }
+      } catch (e) {
+        log(`[系统代理] 缓存暂停：释放槽位失败 ${e.message}`);
+      }
     }
     notePacState('bypass');
     return false;
   }
-  // 每轮重算：只有"确实被别人占着、且没能提取出可串接的本地代理"时才重新写上（见下面分支）
-  foreignPac = null;
-  const rawMode = String(config.pacMode || 'system').trim().toLowerCase();
-  const mode = normalizePacMode(rawMode);
-  if (rawMode === 'browser') {
-    log('[系统代理] pacMode=browser 已不再支持 —— 它依赖的「用缓存模式打开浏览器」已在 V4.3.6 移除，'
-      + '该模式下缓存完全不生效，本次按 off 处理（不占用系统槽位）。'
-      + '要恢复缓存，请把 config.json 的 pacMode 改成 system 后重启程序');
-  }
-  if (mode !== 'system') {
-    // 若之前是 system 模式（槽位里是我们的地址），切过来时把槽位还回去
-    const cur = await readSystemProxyAsync(true);
-    if (isOurPacUrl(cur.autoConfig)) {
-      try {
-        const p = config.pacPrev;
-        if (p && p.existed && p.value) { writeAutoConfig(p.value); log(`[系统代理] pacMode=${mode}：已把槽位还原为 ${p.value}`); }
-        else { writeAutoConfig(''); log(`[系统代理] pacMode=${mode}：已释放系统槽位`); }
-      } catch (e) { log(`[系统代理] pacMode=${mode}：释放槽位失败 ${e.message}`); }
-    }
-    notePacState('mode:' + mode);
-    return false;
-  }
+
   const s = await readSystemProxyAsync(true);
   const ours = ourPacUrl();
 
-  // 被别的程序（典型：雷神网页加速把自己的 PAC 写进槽位）占着：
-  // 先试着从它的 PAC 里提取本地代理 —— 提取到就「接管并串接」（它的加速照常工作，
-  // 我们缓存游戏资源，互不抢占）；提取不到才让位（不知道它怎么加速，不敢碰）。
+  // 别的程序占用 PAC 时，先尝试提取它使用的本机 HTTP 代理并串接；
+  // 提取不到则让位，不抢别人的系统代理。
   if (s.autoConfig && !isOurPacUrl(s.autoConfig)) {
     const ext = extractProxyFromPac(s.autoConfig);
     if (ext.proxy) {
-      foreignPac = null;                     // 提取成功 -> 会接管并串接，不再算"被占着"
       if (config.accelProxy !== ext.proxy) {
         saveConfig({ accelProxy: ext.proxy, accelProxyFrom: s.autoConfig });
       }
       notePacState('foreign-chain:' + s.autoConfig + ' -> ' + ext.proxy);
-      // 落到下面的安装流程
     } else {
-      // 记下占用者与原因：界面、自检页、日志都靠它说明"为什么没接管、接下来怎么办"
       foreignPac = { url: s.autoConfig, reason: ext.reason || '' };
       notePacState('foreign:' + s.autoConfig);
       return false;
     }
   }
 
-  // 已经是我们的：稳定状态，计数清零
   if (s.autoConfig === ours) {
     pacTakenThenLost = 0;
     notePacState('ours');
     return true;
   }
 
-  // 槽位空着。刚被反复清掉的话先退让一会儿，别和加速器来回抢
   if (pacPauseUntil > Date.now()) {
     notePacState('paused');
     return false;
   }
 
   if (!config.pacPrev) {
-    // 第一次接管：把「原本是什么」记进 config.json，退出时按它还原。
-    // 若槽位里已经是我们的地址，说明接管发生在更早（比如那个已被删掉的安装脚本），
-    // 原始值无从得知 —— 按「原本没有」记录，退出时清除。绝不能把「我们自己的地址」
-    // 当成原值记下来，那样退出时等于还原成自己，槽位永远不还。
     saveConfig({
       pacPrev: isOurPacUrl(s.autoConfig)
         ? { existed: false, value: '' }
         : { existed: !!s.autoConfig, value: s.autoConfig || '' },
     });
   }
+
   try {
     writeAutoConfig(ours);
     pacTakenThenLost++;
@@ -737,10 +757,12 @@ function isNoiseHost(host) {
   return NOISE_HOST_RE.test(String(host || ''));
 }
 
-// 给界面/日志用的系统代理状态摘要
+// 给界面/日志用的代理接入状态摘要。
+// 注意：这里只读取系统代理用来自动选择上游，绝不会修改它。
 function systemProxyInfo() {
   revalidateSystemProxy();   // 数据过期就后台刷新，本次先用缓存值（V4.12.0：不再同步查注册表）
   const s = readSystemProxy();
+  const mode = normalizeProxyMode(config.proxyMode);
   // V4.20.5：面板要如实 —— 探明不通的本机串接（config.json 里留下的加速器端口、accelProxy、
   // 系统静态代理残留都算）不能再报"其余流量/回源经它"。候选链与 buildPac 用**同一个表达式**，
   // 判定读缓存（TTL 2 分钟）并顺手触发刷新，保证结论不会僵死在旧值上。
@@ -748,10 +770,16 @@ function systemProxyInfo() {
   const chainDead = !!(chainCand && isLoopbackAddr(chainCand) && shouldChainTo(chainCand, chainLiveness).chain === false);
   return {
     pacUrl: ourPacUrl(),
-    mode: normalizePacMode(config.pacMode),
+    mode,
+    proxyPort: PROXY_PORT,
+    configuredProxyPort: parseUserPort(config.proxyPort) || DEFAULT_PROXY_PORT,
+    proxyPortSource: PROXY_PORT_SOURCE,
+    listening: proxyState.listening,
+    listenError: proxyState.error,
     bypass: pacBypass,
     autoConfig: s.autoConfig,
-    installed: isOurPacUrl(s.autoConfig),
+    // global 模式看系统 PAC 是否由本程序接管；active/passive 看本地代理端口。
+    installed: mode === 'global' ? isOurPacUrl(s.autoConfig) : proxyState.listening,
     upstream: s.upstream || '',
     upstreamFrom: s.upstreamFrom,
     // V4.20.8：面板只讲结果（加速器地址 / 直连、是 / 否）——这几个字段留给接口与测试用，界面不再显示。
@@ -799,7 +827,7 @@ async function localListeners(includeAll) {
   // 注意：这里要晚于 PROXY_PORT 的声明去取，不能在模块顶层拼这个集合
   const ourPorts = new Set([PORT, PROXY_PORT]);
   const run = (cmd) => new Promise((resolve) => {
-    exec(cmd, { encoding: 'latin1', timeout: 8000, maxBuffer: 1 << 24 },
+    exec(cmd, { encoding: 'latin1', timeout: 8000, maxBuffer: 1 << 24, windowsHide: true },
       (err, stdout) => resolve(err ? '' : String(stdout || '')));
   });
   // 两条命令互不依赖，并行跑
@@ -4017,6 +4045,7 @@ async function exportDiagnostics() {
       ok: true, cacheRoot: CACHE_ROOT, cacheRootExists: fs.existsSync(CACHE_ROOT),
       uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
       stats, recentErrors, lastProbeAt,
+      proxyAccess: systemProxyInfo(),
       systemProxy: systemProxyInfo(), upstreamProbe: upstreamProbeInfo(),
       mem: process.memoryUsage(),
     }, null, 2));
@@ -4422,6 +4451,130 @@ function launchExeViaShell(exe, args, cb) {
     });
 }
 
+// 从注册表里的 URL 打开命令中取 exe。常见形式：
+//   "C:\Program Files\Google\Chrome\Application\chrome.exe" --single-argument %1
+function extractExeFromCommand(command) {
+  const text = String(command || '').trim();
+  let m = /^"([^"]+?\.exe)"/i.exec(text);
+  if (!m) m = /^(.+?\.exe)(?:\s|$)/i.exec(text);
+  return m ? m[1].trim() : '';
+}
+
+function defaultBrowserPath() {
+  const { execFileSync } = require('child_process');
+  const query = (key, value) => {
+    const args = ['query', key];
+    if (value) args.push('/v', value);
+    else args.push('/ve');
+    return execFileSync('reg', args, {
+      encoding: 'latin1',
+      timeout: 5000,
+      windowsHide: true,
+    });
+  };
+  try {
+    const uc = query('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice', 'ProgId');
+    const pm = /ProgId\s+REG_SZ\s+(\S+)/i.exec(uc);
+    if (!pm) return '';
+    const open = query('HKCR\\' + pm[1].trim() + '\\shell\\open\\command');
+    const cm = /REG_SZ\s+(.+)$/mi.exec(open);
+    const exe = cm ? extractExeFromCommand(cm[1]) : '';
+    return exe && fs.existsSync(exe) ? exe : '';
+  } catch {
+    return '';
+  }
+}
+
+function isChromiumBrowser(exe) {
+  return /^(chrome|msedge|thorium|brave|vivaldi|chromium|iron|opera)\.exe$/i.test(path.basename(exe || ''));
+}
+
+function isExeRunning(exe, cb) {
+  const ps = "if (Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -ieq '"
+    + String(exe).replace(/'/g, "''") + "' } | Select-Object -First 1) { '1' } else { '0' }";
+  const b64 = Buffer.from(ps, 'utf16le').toString('base64');
+  require('child_process').execFile('powershell.exe',
+    ['-NoProfile', '-EncodedCommand', b64],
+    { timeout: 15000, encoding: 'utf8', windowsHide: true },
+    (err, stdout) => cb(err ? null : String(stdout || '').trim() === '1'));
+}
+
+// 启动 GBF 浏览器。
+// active：只给这一次启动的 Chromium 进程加 --proxy-pac-url，不写系统代理或浏览器配置。
+// global：不注入进程参数，沿用已接管的系统 PAC。
+// passive：不注入任何代理；用户自行把浏览器代理指向 PROXY_PORT。
+function launchGameBrowser(url, label, cb) {
+  const mode = normalizeProxyMode(config.proxyMode);
+  const configured = gameLaunchPath();
+  if (mode === 'passive' || mode === 'global') {
+    if (configured) {
+      if (!fs.existsSync(configured)) {
+        return cb({ ok: false, code: 'BAD_PATH', mode, error: '找不到指定的启动程序：' + configured });
+      }
+      return launchExeViaShell(configured, [url], (result) => cb(Object.assign({
+        target: 'custom', mode, proxied: false, globallyProxied: mode === 'global', program: configured,
+      }, result)));
+    }
+    try {
+      const { spawn } = require('child_process');
+      const cp = spawn('rundll32', ['url.dll,FileProtocolHandler', url],
+        { detached: true, stdio: 'ignore' });
+      cp.on('error', () => { /* 服务端日志已覆盖启动入口 */ });
+      cp.unref();
+      return cb({ ok: true, target: 'default', mode, proxied: false, globallyProxied: mode === 'global' });
+    } catch (e) {
+      return cb({ ok: false, mode, error: e.message });
+    }
+  }
+
+  const exe = configured || defaultBrowserPath();
+  if (!exe) {
+    return cb({
+      ok: false, code: 'NO_GAME_BROWSER', mode,
+      error: '无法解析系统默认浏览器。请先在「启动游戏」旁选择 Chromium 内核浏览器。',
+    });
+  }
+  if (!fs.existsSync(exe)) {
+    return cb({ ok: false, code: 'BAD_PATH', mode, error: '找不到 GBF 浏览器：' + exe });
+  }
+  if (!isChromiumBrowser(exe)) {
+    return cb({
+      ok: false, code: 'UNSUPPORTED_BROWSER', mode,
+      error: '主动模式只能在启动时为 Chromium 内核浏览器注入代理；请选择 Edge、Chrome、Thorium 等，或改用被动模式。',
+    });
+  }
+  if (!proxyState.listening) {
+    return cb({
+      ok: false, code: 'PROXY_NOT_READY', mode,
+      error: 'GBF-Cache 代理端口尚未监听成功：' + (proxyState.error || ('127.0.0.1:' + PROXY_PORT)),
+    });
+  }
+  isExeRunning(exe, (running) => {
+    if (running) {
+      const consoleExe = consoleBrowserPath();
+      const sameAsConsole = !!consoleExe
+        && (() => {
+          try { return samePath(exe, consoleExe); } catch { return false; }
+        })();
+      return cb({
+        ok: false, code: 'BROWSER_RUNNING', mode,
+        error: sameAsConsole
+          ? '该浏览器同时也是“控制台浏览器”，控制台打开期间它必然处于运行状态；主动模式无法再给已运行实例注入代理。请把“控制台浏览器”改成 Edge、Chrome 等另一个浏览器，再完全退出该 GBF 浏览器后重试。'
+          : '该 GBF 浏览器已经在运行。Chromium 会忽略后来传入的代理参数，请完全退出该浏览器后再点「' + label + '」。',
+      });
+    }
+    // 用 PAC 而不是把整个浏览器都送去 MITM：
+    // - GBF 资源交给本地缓存代理
+    // - 游戏接口/其他站点交给已配置的上游或直连
+    // 参数只属于这一次启动的浏览器进程。
+    const proxyArg = '--proxy-pac-url=' + ourPacUrl();
+    launchExeViaShell(exe, [proxyArg, url], (result) => cb(Object.assign({
+      target: configured ? 'custom' : 'default-detected',
+      mode, proxied: true, proxy: HOST + ':' + PROXY_PORT, program: exe,
+    }, result)));
+  });
+}
+
 // ---------------------------------------------------------------- 请求处理
 
 // ---------------------------------------------------------------- 命中的 Range 支持（P0-4，V4.17.0）
@@ -4616,6 +4769,7 @@ async function buildStatsPayload() {
     server: {
       uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
       port: PORT,
+      proxyPort: PROXY_PORT,
       version: process.version,
       platform: process.platform,
     },
@@ -4642,6 +4796,7 @@ async function buildStatsPayload() {
       //（探针是在控制台自己那个窗口里跑的，该窗口未必经过代理，两者要一起看）
       activeRecently: lastProxyRequestAt > 0 && (Date.now() - lastProxyRequestAt) < 600000,
     },
+    proxyAccess: systemProxyInfo(),
     systemProxy: systemProxyInfo(),
     cert: await certStoreInfo(),
     upstreamProbe: upstreamProbeInfo(),
@@ -4685,6 +4840,7 @@ async function handle(req, res) {
       stats,
       recentErrors,
       lastProbeAt,
+      proxyAccess: systemProxyInfo(),
       systemProxy: systemProxyInfo(),
       upstreamProbe: upstreamProbeInfo(),
       // 内存读数（V4.7.2）：长跑稳定性观察（原清单 P1-7）一直没做，一部分原因就是**没有仪表** ——
@@ -4816,85 +4972,31 @@ async function handle(req, res) {
   }
 
   // 控制台「启动游戏」按钮 / 托盘开机自启：把游戏打开。
-  //
-  // 两条路（V4.5.0 起可自选）：
-  //   · 配置了 gameLaunchPath —— 启动那个 exe，并把游戏 URL 作为**参数**传给它
-  //     （用途：指定某个浏览器，或任何自己写的启动包装程序）；
-  //   · 没配置（默认）—— ShellExecute 打开游戏 URL，走**系统默认浏览器**。
-  // 两条路都不碰浏览器配置、不需要任何扩展：缓存一律靠系统 PAC 分流生效，而系统 PAC 对所有
-  // 浏览器一视同仁，所以"不挑浏览器"依然是默认形态。
-  // （与 V4.3.6 移除的「独立窗口 / 显式把代理塞给 Edge」不同：那个只对 Edge 有效、还要维护一份
-  //  独立浏览器 profile；这里只是换个程序去打开同一个 URL。）
+  // active 模式只给本次启动的 GBF 浏览器进程注入代理；passive 模式不接管任何程序。
   const GAME_URL = 'https://game.granbluefantasy.jp/';
   if (rawUrl.startsWith('/api/launch-game') && req.method === 'POST') {
-    const exe = gameLaunchPath();
-    if (exe) {
-      if (!fs.existsSync(exe)) {
-        return send(res, 400, { 'Content-Type': 'application/json' }, JSON.stringify({
-          ok: false, code: 'BAD_PATH',
-          error: '找不到指定的启动程序（路径不存在或已移动）：' + exe
-            + '　—— 可在「启动游戏」旁的 ⚙ 里重新选择，或清空该路径改用默认浏览器',
-        }));
-      }
-      // 注意：响应在回调里异步发出 —— 这里必须立刻 return，
-      // 否则会一路落到底部的 404 兜底，把请求抢先应答掉。
-      launchExeViaShell(exe, [GAME_URL], (result) => {
-        log('[控制台] 启动游戏（指定程序 ' + exe + '）：'
-          + (result.ok ? (result.pending ? '已交给系统，可能在等 UAC 确认' : '成功') : '失败：' + result.error));
-        send(res, 200, { 'Content-Type': 'application/json' },
-          JSON.stringify(Object.assign({ target: 'custom', program: exe }, result)));
-      });
-      return;
-    }
-    try {
-      // ShellExecute 方式打开 URL —— 走系统默认浏览器，不挑浏览器、不碰任何配置
-      const { spawn } = require('child_process');
-      const cp = spawn('rundll32', ['url.dll,FileProtocolHandler', GAME_URL],
-        { detached: true, stdio: 'ignore' });
-      cp.on('error', () => { /* 防 Unhandled 'error' 崩掉服务 */ });
-      cp.unref();
-      log('[控制台] 已用默认浏览器打开游戏（系统 PAC 分流：资源走缓存、接口直连）');
-      return send(res, 200, { 'Content-Type': 'application/json' }, JSON.stringify({ ok: true, target: 'default' }));
-    } catch (e) {
-      log(`[控制台] 默认浏览器打开游戏失败：${e.message}`);
-      return send(res, 500, { 'Content-Type': 'application/json' }, JSON.stringify({ ok: false, error: e.message }));
-    }
+    launchGameBrowser(GAME_URL, '启动游戏', (result) => {
+      log('[控制台] 启动游戏（' + normalizeProxyMode(config.proxyMode) + '）：'
+        + (result.ok
+          ? (result.proxied
+              ? '已注入代理 ' + result.proxy + '，目标 '
+              : (result.globallyProxied ? '沿用系统全局 PAC，目标 ' : '未注入代理，目标 '))
+            + (result.program || 'default')
+          : '失败：' + result.error));
+      send(res, result.ok ? 200 : 400, { 'Content-Type': 'application/json' }, JSON.stringify(result));
+    });
+    return;
   }
 
-  // 自检统一由服务端启动：使用“启动游戏”的目标程序，而不是当前控制台所在的浏览器。
-  // 这样从 Chrome/其他浏览器或托盘进入控制台时，真正跑 GBF 的浏览器仍是唯一的自检环境。
+  // 自检走与“启动游戏”完全相同的目标和代理接入方式。
   if (rawUrl === '/api/open-self-test' && req.method === 'POST') {
     const selfTestUrl = `http://${HOST}:${PORT}/test`;
-    const exe = gameLaunchPath();
-    if (exe) {
-      if (!fs.existsSync(exe)) {
-        return send(res, 400, { 'Content-Type': 'application/json' }, JSON.stringify({
-          ok: false, code: 'BAD_PATH',
-          error: '找不到游戏浏览器（路径不存在或已移动）：' + exe
-            + '　—— 可在「启动游戏」旁的 ⚙ 里重新选择',
-        }));
-      }
-      launchExeViaShell(exe, [selfTestUrl], (result) => {
-        log('[控制台] 打开自检页（游戏浏览器 ' + exe + '）：'
-          + (result.ok ? (result.pending ? '已交给系统，可能在等 UAC 确认' : '成功') : '失败：' + result.error));
-        send(res, 200, { 'Content-Type': 'application/json' },
-          JSON.stringify(Object.assign({ target: 'game-browser', program: exe }, result)));
-      });
-      return;
-    }
-    try {
-      const { spawn } = require('child_process');
-      const cp = spawn('rundll32', ['url.dll,FileProtocolHandler', selfTestUrl],
-        { detached: true, stdio: 'ignore' });
-      cp.on('error', () => { /* 防 Unhandled 'error' 崩掉服务 */ });
-      cp.unref();
-      log('[控制台] 打开自检页（未配置游戏浏览器，使用系统默认浏览器）');
-      return send(res, 200, { 'Content-Type': 'application/json' },
-        JSON.stringify({ ok: true, target: 'default' }));
-    } catch (e) {
-      log(`[控制台] 打开自检页失败：${e.message}`);
-      return send(res, 500, { 'Content-Type': 'application/json' }, JSON.stringify({ ok: false, error: e.message }));
-    }
+    launchGameBrowser(selfTestUrl, '运行自检', (result) => {
+      log('[控制台] 打开自检页（' + normalizeProxyMode(config.proxyMode) + '）：'
+        + (result.ok ? '成功' : '失败：' + result.error));
+      send(res, result.ok ? 200 : 400, { 'Content-Type': 'application/json' }, JSON.stringify(result));
+    });
+    return;
   }
 
   // 切换开机自启相关开关：游戏（enabled）、启动目标（target）、加速器（accel）。
@@ -5337,17 +5439,17 @@ async function handle(req, res) {
   //   POST /api/pac-bypass?on=0   恢复（重新接管；若期间槽位被加速器占了，走既有的
   //                               「从外来 PAC 提取代理并串接」或让位逻辑，不会硬抢）
   // 场景：怀疑缓存引入问题时，一键对比"开/关缓存"，不必整个退出程序。
-  // 重复发同一状态是幂等的：状态没翻转就不动 installPacSetting。
+  // 重复发同一状态是幂等的：状态没翻转就不改缓存开关。
   if (rawUrl.startsWith('/api/pac-bypass') && req.method === 'POST') {
     let on = '';
     try { on = new URL('http://x' + rawUrl).searchParams.get('on') || ''; } catch { /* 忽略 */ }
     if ((on === '1' || on === '0') && (on === '1') !== pacBypass) {
       pacBypass = (on === '1');
-      log('[控制台] 临时直连' + (pacBypass ? '开启 —— 缓存接管暂停' : '关闭 —— 恢复缓存接管'));
-      await installPacSetting().catch(() => { /* 内部各分支已兜底 */ });
+      log('[控制台] 缓存' + (pacBypass ? '暂停 —— 代理改为透明转发' : '恢复 —— 重新启用 GBF 缓存拦截'));
+      await installPacSetting().catch(() => {});
     }
     return send(res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
-      JSON.stringify({ ok: true, bypass: pacBypass, systemProxy: systemProxyInfo() }));
+      JSON.stringify({ ok: true, bypass: pacBypass, proxyAccess: systemProxyInfo() }));
   }
 
   // ---------------------------------------------------------------- 设置面板（V4.15.2）
@@ -5398,6 +5500,7 @@ async function handle(req, res) {
     const manualPort = manualPortMatch
       ? parseInt(manualPortMatch[1], 10)
       : (savedPort >= 1 && savedPort <= 65535 ? savedPort : null);
+    const wantedProxyPort = parseUserPort(config.proxyPort) || DEFAULT_PROXY_PORT;
     return {
       prewarmEnabled: config.prewarmEnabled === true,   // V4.24.1：默认积极档（loadConfig 后归一为 true）
       followEnabled: config.followEnabled !== false,    // 跟随式小预热：默认开
@@ -5406,12 +5509,18 @@ async function handle(req, res) {
       autoEvictStamps: config.autoEvictStamps === true,
       openDashboardOnStart: config.openDashboardOnStart !== false,
       consoleBrowserPath: consoleBrowserPath(),
+      gameLaunchPath: gameLaunchPath(),
       autoLaunchGame: config.autoLaunchGame !== false,
       autoLaunchAccel: config.autoLaunchAccel !== false,
       floatOnConsoleClose: config.floatOnConsoleClose !== false,
       cacheEnabled: !pacBypass,
       manualUpstreamEnabled: !!manualUpstream,
       manualUpstreamPort: manualPort,
+      proxyMode: normalizeProxyMode(config.proxyMode),
+      proxyPort: wantedProxyPort,
+      effectiveProxyPort: PROXY_PORT,
+      proxyPortSource: PROXY_PORT_SOURCE,
+      proxyRestartRequired: wantedProxyPort !== PROXY_PORT,
       autoStartWithWindows: null,   // GET 端点会用注册表实况补上（查询要起子进程，不跟着轮询跑）
     };
   }
@@ -5421,6 +5530,39 @@ async function handle(req, res) {
     st.autoStartWithWindows = await autoStartState();
     return send(res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
       JSON.stringify({ ok: true, settings: st }));
+  }
+
+  if (rawUrl.startsWith('/api/set-proxy-mode') && req.method === 'POST') {
+    let mode = '';
+    try { mode = (new URL('http://x' + rawUrl).searchParams.get('mode') || '').trim().toLowerCase(); } catch { /* 忽略 */ }
+    if (mode !== 'active' && mode !== 'passive' && mode !== 'global') {
+      return send(res, 400, { 'Content-Type': 'application/json; charset=utf-8' },
+        JSON.stringify({ ok: false, error: '代理行为只能是 active、passive 或 global' }));
+    }
+    saveConfig({ proxyMode: mode });
+    // global 安装系统 PAC；其他模式释放本程序自己的旧 PAC。
+    await installPacSetting().catch(() => {});
+    log('[设置] 代理行为 = ' + mode);
+    return send(res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+      JSON.stringify({ ok: true, settings: settingsState() }));
+  }
+
+  if (rawUrl.startsWith('/api/set-proxy-port') && req.method === 'POST') {
+    let port = null;
+    try { port = parseUserPort(new URL('http://x' + rawUrl).searchParams.get('port')); } catch { /* 忽略 */ }
+    if (!port) {
+      return send(res, 400, { 'Content-Type': 'application/json; charset=utf-8' },
+        JSON.stringify({ ok: false, error: '代理端口必须是 1~65535 的整数' }));
+    }
+    if (port === PORT) {
+      return send(res, 400, { 'Content-Type': 'application/json; charset=utf-8' },
+        JSON.stringify({ ok: false, error: '代理端口不能与控制台端口 ' + PORT + ' 相同' }));
+    }
+    saveConfig({ proxyPort: port });
+    const restartRequired = port !== PROXY_PORT;
+    log('[设置] 代理端口 = ' + port + (restartRequired ? '（重启后生效）' : ''));
+    return send(res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+      JSON.stringify({ ok: true, restartRequired, settings: settingsState() }));
   }
 
   // 手动 HTTP 上游代理：固定 127.0.0.1，只开放端口配置。
@@ -5489,11 +5631,11 @@ async function handle(req, res) {
     if (on === null) return fail(400, '缺 on 参数（1 / 0）');
 
     if (name === 'cacheEnabled') {
-      // 缓存开关 = 临时直连的反向（滑块开 = 缓存工作中）。滑块关 = 把 PAC 槽位让出去。
+      // 缓存开关 = 代理透明转发的反向（滑块开 = 缓存工作中）。
       if (pacBypass === on) {
         pacBypass = !on;
-        log('[设置] 缓存功能' + (on ? '恢复' : '暂停') + '（临时直连' + (pacBypass ? '开' : '关') + '）');
-        await installPacSetting().catch(() => { /* 内部已兜底 */ });
+        log('[设置] 缓存功能' + (on ? '恢复' : '暂停') + '（代理透明转发）');
+        await installPacSetting().catch(() => {});
       }
       return send(res, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
         JSON.stringify({ ok: true, name, on }));
@@ -5589,7 +5731,7 @@ async function handle(req, res) {
 <div class="dim">这几行回答的是"这条请求会被交给谁" —— 如果探针那条不是本程序，问题在分流，而不是浏览器扩展。</div>
 <table id="pacRows"><tr><td class="wait">读取中…</td></tr></table>
 
-<h3>接管状态与根证书</h3>
+<h3>代理接入状态与根证书</h3>
 <div class="dim">根证书必须装在「受信任的根证书颁发机构」；命令行要用 <code>-addstore -f Root</code>，
 <b>不要用 <code>-addstore CA</code></b>（那是「中间证书颁发机构」，浏览器不认 ——
 症状是资源<b>全部</b>加载失败、缓存几乎不增长，很容易被当成网络问题）。</div>
@@ -5659,15 +5801,15 @@ fetch('/proxy.pac', { cache: 'no-store' }).then(function (r) { return r.text(); 
     line('bad', '失败', '取不到 /proxy.pac：' + e.message + '（服务端可能在旧版本）');
 });
 
-/* ---------- 接管状态：直接问服务端（注册表事实），不靠猜 ---------- */
-var takeover = { mode: '?', installed: null, autoConfig: '' };
+/* ---------- 代理接入状态：直接问服务端 ---------- */
+var takeover = { mode: '?', listening: false, port: 0 };
 var CERT = null;   // 服务端查出来的根证书存储位置（装错位置是"资源全废"的常见真因）
 var CERT_LABEL = {
   ok: '已装好', misplaced: '装错位置', missing: '没找到', stale: '是旧的那张', unknown: '未能判定'
 };
 fetch('/api/stats', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
-  var sp = d.systemProxy || {};
-  takeover = { mode: sp.mode || '?', installed: sp.installed, autoConfig: sp.autoConfig || '' };
+  var sp = d.proxyAccess || d.systemProxy || {};
+  takeover = { mode: sp.mode || '?', listening: !!sp.listening, port: sp.proxyPort || 8899, error: sp.listenError || '' };
   CERT = d.cert || null;
   var certRows = '';
   if (CERT) {
@@ -5690,22 +5832,15 @@ fetch('/api/stats', { cache: 'no-store' }).then(function (r) { return r.json(); 
         '　<button onclick="recheckCert()">重新检查</button>');
   }
   document.getElementById('envRows').innerHTML =
-    line(takeover.installed ? 'ok' : 'bad', takeover.installed ? '已接管' : '未接管',
-      '接管方式 <code>' + takeover.mode + '</code>　系统自动配置脚本：<code>' + (takeover.autoConfig || '（空）') + '</code>') +
-    (takeover.foreign && takeover.foreign.url
-      ? line('bad', '槽位被占',
-          '系统「自动配置脚本」被<b>别的程序</b>占用：<code>' + takeover.foreign.url + '</code><br>' +
-          '本程序<b>没有接管</b>它（避免与加速器互抢），因此<b>缓存不会生效</b>。<br>' +
-          '没接管的原因：' + (takeover.foreign.reason || '未知') + '<br>' +
-          '<b>可选做法</b>：① 把加速器改成「静态代理 / 全局代理」模式 —— 本程序能自动识别并串接它，' +
-          '缓存与加速并用（<b>首选</b>）；② 在占用它的程序里关掉「系统代理 / PAC」，然后重启本程序；' +
-          '③ 若它不依赖 PAC（TUN 网卡 / 路由模式），可加载随包的 <code>console-extension</code>' +
-          '（浏览器层优先级高于系统设置）；④ 确认不再需要它时，再手动清空该槽位。')
-      : '') +
+    line(takeover.listening ? 'ok' : 'bad', takeover.listening ? '端口监听中' : '端口未监听',
+      '代理行为：<code>' + takeover.mode + '</code>　本地代理：<code>127.0.0.1:' + takeover.port + '</code>' +
+      (takeover.error ? '<br>' + takeover.error : '')) +
     line('wait', '说明',
-      '接管方式为 <code>system</code> 时，浏览器<b>不需要装扩展</b>：系统代理设置对所有浏览器生效。' +
-      '随包的 <code>console-extension</code> 是可选兜底 —— 它给 Chromium 内核浏览器单独挂上本程序的 PAC' +
-      '（在 Chromium 里扩展的代理设置优先于系统设置），适合系统槽位被加速器/别的代理占用的情况；不装也能正常缓存。') +
+      takeover.mode === 'passive'
+        ? '被动模式不接管任何程序。只有你手动设置浏览器代理到上面的端口时，流量才会进入 GBF-Cache。'
+        : takeover.mode === 'global'
+          ? '全局模式接管 Windows 系统「自动配置脚本」，对所有遵循系统代理的浏览器生效；退出时还原原值。'
+          : '主动模式只给由 GBF-Cache 启动的 GBF 浏览器注入代理；不会修改系统代理或其它程序。') +
     certRows;
 }).catch(function (e) {
   document.getElementById('envRows').innerHTML = line('bad', '失败', '取不到 /api/stats：' + e.message);
@@ -5726,7 +5861,7 @@ probe.onload = function () {
   if (settled) return; settled = true;
   var v = document.getElementById('verdict');
   v.className = 'ok';
-  v.innerHTML = '<b>✅ 接管正常</b><br>' +
+  v.innerHTML = '<b>✅ 代理转发正常</b><br>' +
     '探针图由你本机的缓存服务返回，说明游戏资源请求确实被转到了这里。' +
     '如果控制台里日志很少或为空，通常是因为资源已经全部命中<b>浏览器自身的缓存</b>，' +
     '根本不需要发起网络请求 —— 那是最理想的状态。';
@@ -6010,7 +6145,6 @@ const HOST_LOG_VERBOSE = process.env.GBFCACHE_VERBOSE === '1' || process.env.ACG
 // 代价是需要一张本地信任的根证书来做 TLS 解密（沿用既有方案的做法）。
 
 const tls = require('tls');
-const PROXY_PORT = parseInt(process.env.GBFCACHE_PROXY_PORT || '8899', 10);
 const CERT_DIR = path.join(__dirname, 'certs');
 
 let tlsContext = null;
@@ -6207,6 +6341,7 @@ async function handleIntercepted(host, req, res) {
 
 function startProxy() {
   if (!loadCerts()) {
+    proxyState.error = 'certs/server.crt 或 server.key 不可用';
     log('[代理] 未找到 certs/server.crt，HTTPS 代理未启用');
     return;
   }
@@ -6224,10 +6359,12 @@ function startProxy() {
 
   const proxy = http.createServer((req, res) => {
     // 明文 HTTP 代理请求：绝对 URI 形式
+    lastProxyRequestAt = Date.now();
+    lastProxyRequestPath = req.url || '';
     try {
       const u = new URL(req.url);
       const host = u.hostname;
-      if (INTERCEPT_HOST_RE.test(host)) {
+      if (!pacBypass && INTERCEPT_HOST_RE.test(host)) {
         req.url = u.pathname + u.search;
         req.headers.host = u.host;
         handleIntercepted(host, req, res).catch(() => { try { res.writeHead(400); res.end(); } catch { /* 忽略 */ } });
@@ -6248,6 +6385,8 @@ function startProxy() {
 
   // HTTPS：先回 200，再用我们的证书跟浏览器握手，冒充目标主机
   proxy.on('connect', (req, clientSocket, head) => {
+    lastProxyRequestAt = Date.now();
+    lastProxyRequestPath = 'CONNECT ' + (req.url || '');
     // 解析 CONNECT 目标。必须按 URL 解析，不能按冒号切：
     // 浏览器大量使用 IPv6，地址形如 [2400:3200::1]:443，按冒号切会得到 host='[2400'、port=3200，
     // 结果是「缓存模式的浏览器连不上任何网站」（curl 很少走 IPv6，所以 curl 测不出来）。
@@ -6264,7 +6403,7 @@ function startProxy() {
       targetPort = i === -1 ? 443 : (parseInt(s.slice(i + 1), 10) || 443);
     }
 
-    if (!INTERCEPT_HOST_RE.test(targetHost)) {
+    if (pacBypass || !INTERCEPT_HOST_RE.test(targetHost)) {
       // 不在接管范围：建立隧道原样透传（不解释 TLS，也不缓存）
       //
       // 关键：若配了上游代理（VPN / 加速器的本地代理），**隧道也要经它出去**。
@@ -6337,8 +6476,15 @@ function startProxy() {
     inner.emit('connection', tlsSocket);
   });
 
-  proxy.on('error', (e) => log(`[代理] 错误: ${e.message}`));
+  proxy.on('error', (e) => {
+    proxyState.listening = false;
+    proxyState.error = e.message;
+    log(`[代理] 监听 ${HOST}:${PROXY_PORT} 失败: ${e.message}`);
+  });
+  proxy.on('close', () => { proxyState.listening = false; });
   proxy.listen(PROXY_PORT, HOST, () => {
+    proxyState.listening = true;
+    proxyState.error = '';
     log(`HTTPS 代理已启动: http://${HOST}:${PROXY_PORT}（接管 *.granbluefantasy.jp / *.granbluefantasy.akamaized.net）`);
   });
 }
@@ -6626,6 +6772,18 @@ function forwardTransparent(host, req, res) {
 
 // 普通 HTTP 转发（用于非接管域名）
 function httpRequestForward(req, u) {
+  const chain = currentUpstreamProxy();
+  if (chain) {
+    const headers = upstreamHeaders(req.headers);
+    headers.host = u.host;
+    return http.request({
+      hostname: chain.host,
+      port: chain.port,
+      path: u.href,
+      method: req.method,
+      headers,
+    });
+  }
   const mod = u.protocol === 'http:' ? http : require('https');
   return mod.request({
     protocol: u.protocol,
@@ -6633,7 +6791,7 @@ function httpRequestForward(req, u) {
     port: u.port || (u.protocol === 'http:' ? 80 : 443),
     path: u.pathname + u.search,
     method: req.method,
-    headers: req.headers,
+    headers: upstreamHeaders(req.headers),
   });
 }
 
@@ -6643,6 +6801,42 @@ function httpRequestForward(req, u) {
 // --app=，否则命令行参数会被当成未知选项。判错也不致命：最坏是浏览器忽略这个参数。
 function isFirefoxFamily(exe) {
   return /^(firefox|waterfox|librewolf|palemoon)\.exe$/i.test(path.basename(exe || ''));
+}
+
+// 发行版直接双击 GBFCache.exe 时，自动补一个托盘宿主。托盘已经负责启动服务时
+// （GBFCACHE_LAUNCHED_BY_TRAY=1）或重启中转明确要求不进托盘时
+// （GBFCACHE_NO_TRAY=1）都不会重复启动。
+function ensureTrayForPackagedLaunch() {
+  if (process.platform !== 'win32') return false;
+  if (process.env.GBFCACHE_LAUNCHED_BY_TRAY === '1') return false;
+  if (process.env.GBFCACHE_NO_TRAY === '1') return false;
+  if (path.basename(process.execPath).toLowerCase() !== 'gbfcache.exe') return false;
+  const trayScript = path.join(__dirname, 'tray.ps1');
+  if (!fs.existsSync(trayScript)) return false;
+  try {
+    const powershell = path.join(process.env.SystemRoot || 'C:\\Windows',
+      'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const q = (v) => "'" + String(v).replace(/'/g, "''") + "'";
+    // 经一次 Start-Process 启动，避免直接子进程随创建它的进程树被一起回收。
+    const ps = 'Start-Process -FilePath ' + q(powershell)
+      + ' -ArgumentList ' + [
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', trayScript,
+      ].map(q).join(',')
+      + ' -WindowStyle Hidden';
+    const encoded = Buffer.from(ps, 'utf16le').toString('base64');
+    require('child_process').execFileSync(powershell, ['-NoProfile', '-EncodedCommand', encoded], {
+      cwd: __dirname,
+      windowsHide: true,
+      env: Object.assign({}, process.env, { GBFCACHE_NO_TRAY: '1' }),
+      timeout: 15000,
+      stdio: 'ignore',
+    });
+    log('[托盘] 检测到直接启动 GBFCache.exe，已请求补启托盘宿主');
+    return true;
+  } catch (e) {
+    log('[托盘] 自动补启失败：' + e.message);
+    return false;
+  }
 }
 
 // 控制台浏览器的选择顺序：config.json 的 consoleBrowserPath > Edge > 系统默认浏览器。
@@ -6751,8 +6945,11 @@ function main() {
 
   server.listen(PORT, HOST, () => {
     startedAt = Date.now();
+    const traySpawned = ensureTrayForPackagedLaunch();
     log('服务已启动，等待浏览器请求...');
     log('程序版本：' + VERSION);
+    log('代理行为：' + normalizeProxyMode(config.proxyMode)
+      + '；监听 ' + HOST + ':' + PROXY_PORT + '（来源：' + PROXY_PORT_SOURCE + '）');
     if (legacyFrozenRoot) {
       log(`缓存目录：已忽略旧版本自动写入的默认路径 ${legacyFrozenRoot}（那不是你选的），`
         + `改用程序目录内的 ${DEFAULT_CACHE_ROOT}`);
@@ -6778,17 +6975,11 @@ function main() {
       }
     } catch (e) { log('[hosts 模式] 启动自检出错：' + e.message); }
 
-    // 接管系统「自动配置脚本」槽位（若空着或本来就是我们的）
+    // global 模式安装并巡检系统 PAC；active/passive 只清理本程序遗留的 PAC。
     installPacSetting().catch(() => { /* 内部各分支已兜底，这里防意外拒载 */ });
 
 
-    // 后台巡检（每 20 秒）：
-    //   1) 确认系统代理槽位还是我们接管的状态 —— 加速器切模式会把它清掉/覆写
-    //   2) 体检/探测加速器的本地代理（方案 C）
-    // V4.12.0：整条巡检改为异步（注册表/netstat/tasklist/PowerShell 全走 exec 系），
-    // 且串行执行 —— installPacSetting 的强制刷新先保鲜缓存，后面的体检直接吃缓存，
-    // 一个 tick 只发一次 reg query。过去这串全是 execSync，每 20 秒把事件循环卡住
-    // 几百毫秒，游戏请求跟着周期性顿一下。
+    // 后台巡检（每 20 秒）：上游健康；global 模式同时复查系统 PAC 槽位。
     // 巡检计数器（V4.15.8 修）：V4.15.2 起这里漏了声明 —— `inspectTicks++` 对未声明
     // 变量直接抛 ReferenceError，而它是 tick 的**第一句**：每 20 秒一抛，后面的
     // PAC 槽位复查 / 上游体检 / 链路体检 / 自动清理被**整段跳过**，日志里只留一条
@@ -6798,7 +6989,9 @@ function main() {
     setInterval(() => {
       (async () => {
         inspectTicks++;
-        try { await installPacSetting(); } catch { /* 忽略 */ }
+        if (normalizeProxyMode(config.proxyMode) === 'global') {
+          await installPacSetting().catch(() => {});
+        }
         await checkUpstreamHealth().catch(() => {});
         await checkChainHealth().catch(() => {});
         // 自动清理过期版本戳（设置面板开关，默认关）：约每 5 分钟点名一次
@@ -6811,7 +7004,8 @@ function main() {
     // 用浏览器「应用模式」打开控制台：无地址栏、无标签页，观感接近原生窗口。
     // V4.21.0 起可在设置面板指定浏览器（不指定则优先 Edge）。设置面板「启动后打开控制台」
     // 可关 —— V4.15.2，关掉后从托盘/双击 exe 手动打开。
-    if (config.openDashboardOnStart !== false
+    if (!traySpawned
+        && config.openDashboardOnStart !== false
         && process.env.GBFCACHE_OPEN_UI !== '0' && process.env.ACGP_OPEN_UI !== '0') {
       openDashboard();
     }
@@ -6819,6 +7013,8 @@ function main() {
 
   server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
+      // 已有一份服务在跑但托盘丢失时，再双击 GBFCache.exe 可借此补回托盘。
+      ensureTrayForPackagedLaunch();
       console.error(`\n端口 ${PORT} 已被占用。`);
       console.error('可能上一次的服务还在运行，或改用其他端口：');
       console.error(`  set GBFCACHE_PORT=8800 && node server.js\n`);
