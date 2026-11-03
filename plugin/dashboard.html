@@ -121,6 +121,7 @@
   .status{font-size:12.5px;display:inline-flex;align-items:center;color:var(--dim);
     background:var(--panel2);border:1px solid var(--line);border-radius:999px;
     padding:3px 11px 3px 10px;box-shadow:var(--inner)}
+  #upstreamTxt{font-variant-numeric:tabular-nums;white-space:nowrap}
 
   /* 主体。V4.8.6：回到"正常文档流 + 每行等宽列"的常规布局。
      ─────────────────────────────────────────────────────────────
@@ -822,6 +823,9 @@ try{
   <div class="status" style="margin-right:18px">
     <span class="dot idle" id="extDot"></span><span id="extTxt">检测中…</span>
   </div>
+  <div class="status" id="upstreamStatus" title="正在读取实际上游代理">
+    <span class="dot idle" id="upstreamDot"></span><span id="upstreamTxt">上游 —</span>
+  </div>
   <div class="status"><span class="dot idle" id="liveDot"></span><span id="liveTxt">连接中</span></div>
   <button id="btnSideMenu" class="gear" title="菜单" onclick="toggleSideMenu(true)">☰</button>
   <button id="btnSettings" class="gear" title="功能设置" onclick="toggleSettings(event)">⚙ 设置</button>
@@ -839,6 +843,11 @@ try{
     <div class="setRow"><span class="setName" title="关闭后从托盘菜单或双击 exe 手动打开">启动后打开控制台</span><button class="switch" id="swOpenDash" onclick="setFeature('openDashboardOnStart', this)" aria-checked="false"></button></div>
     <div class="setRow"><span class="setName" title="打开控制台窗口用哪个浏览器。留空 = 优先 Edge 应用模式（无地址栏）；建议选 Chromium 内核（Edge / Chrome / Iron / Brave / Vivaldi）。">控制台浏览器</span><span style="display:flex;align-items:center;gap:6px;min-width:0"><span class="muted" id="consoleBrowserName" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px" title="默认（优先 Edge）">默认（优先 Edge）</span><button class="mini" id="btnConsoleBrowse" onclick="browseConsoleBrowser()">选择…</button><button class="mini" id="btnConsoleClear" onclick="clearConsoleBrowser()" title="恢复默认（优先 Edge）">默认</button></span></div>
     <div class="setRow" id="consoleBrowserHintRow" style="padding:0 0 2px;display:none"><span class="muted" id="consoleBrowserHint" style="font-size:11.5px;line-height:1.5"></span></div>
+    <div class="setGroup">代理接入</div>
+    <div class="setRow"><span class="setName" title="全局：接管系统代理，对所有程序生效；主动：只给由本程序启动的 GBF 浏览器注入代理；被动：不接管任何程序，由用户手动设置浏览器代理。">代理行为</span><span><button class="mini" id="proxyModeActive" onclick="setProxyMode('active')">主动</button> <button class="mini" id="proxyModePassive" onclick="setProxyMode('passive')">被动</button> <button class="mini" id="proxyModeGlobal" onclick="setProxyMode('global')">全局</button></span></div>
+    <div class="setRow" id="proxyModeHintRow" style="padding:0 0 2px"><span class="muted" id="proxyModeHint" style="font-size:11.5px;line-height:1.5"></span></div>
+    <div class="setRow"><span class="setName" title="全局/主动/被动模式共用的本地代理端口。默认 8899；修改后需重启 GBF-Cache。">代理端口（127.0.0.1）</span><span style="display:flex;align-items:center;gap:6px;min-width:0"><input id="proxyPortInput" type="number" min="1" max="65535" inputmode="numeric" placeholder="8899" style="width:92px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font:12px Consolas,monospace"><button class="mini" id="btnProxyPortSave" onclick="saveProxyPort()">应用</button></span></div>
+    <div class="setRow" id="proxyPortHintRow" style="padding:0 0 2px"><span class="muted" id="proxyPortHint" style="font-size:11.5px;line-height:1.5"></span></div>
     <div class="setGroup">缓存</div>
     <div class="setRow"><span class="setName" title="安静：仅过户当前所需文件；平衡：触发式预热+闲置缓扫；积极：全库预热，预热期间游玩卡顿但预热完成后流畅度最佳。">更新日模式</span><span><button class="mini" id="modeQuiet" onclick="setPrewarmMode('quiet')">安静</button> <button class="mini" id="modeBalanced" onclick="setPrewarmMode('balanced')">平衡</button> <button class="mini" id="modeAggressive" onclick="setPrewarmMode('aggressive')">积极</button></span></div>
     <div class="setRow"><span class="setName" title="游玩过程中触发文件预热，静默状态下缓慢过户">跟随预热+闲置过户</span><button class="switch" id="swFollow" onclick="setFeature('followEnabled', this)" aria-checked="false"></button></div>
@@ -846,6 +855,10 @@ try{
     <div class="setRow"><span class="setName" title="开启状态只预热过户旧文件不下载新文件，关闭状态预热同时下载发现的新文件。">预热只过户、不预下载</span><button class="switch" id="swMigrateOnly" onclick="setFeature('prewarmMigrateOnly', this)" aria-checked="false"></button></div>
     <div class="setRow"><span class="setName" title="自动清掉用不到的旧版本资源，腾出磁盘空间。">自动清理过期版本戳</span><button class="switch" id="swAutoEvict" onclick="setFeature('autoEvictStamps', this)" aria-checked="false"></button></div>
     <div class="setRow"><span class="setName" title="游戏更新开始与完成时，在托盘弹一条提醒。">游戏更新提醒气泡</span><button class="switch" id="swNotify" onclick="setFeature('prewarmNotify', this)" aria-checked="false"></button></div>
+    <div class="setGroup">回源代理</div>
+    <div class="setRow"><span class="setName" title="开启后固定使用下面的 HTTP 本地代理回源，不再自动探测其他加速器代理。">手动指定上游代理（仅 HTTP）</span><button class="switch" id="swManualUpstream" onclick="toggleManualUpstream(this)" aria-checked="false"></button></div>
+    <div class="setRow"><span class="setName">上游端口（127.0.0.1）</span><span style="display:flex;align-items:center;gap:6px;min-width:0"><input id="manualUpstreamPort" type="number" min="1" max="65535" inputmode="numeric" placeholder="例如 8099" style="width:92px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font:12px Consolas,monospace"><button class="mini" id="btnManualUpstreamSave" onclick="saveManualUpstreamPort()">应用</button></span></div>
+    <div class="setRow" id="manualUpstreamHintRow" style="padding:0 0 2px"><span class="muted" id="manualUpstreamHint" style="font-size:11.5px;line-height:1.5">关闭时保持现有自动探测。</span></div>
     <div class="setRow"><span class="setName">缓存功能<span class="muted" id="cacheStateNote"></span></span><button class="switch" id="btnBypass" onclick="togglePacBypass(this)" aria-checked="false"></button></div>
     <div class="setGroup">悬浮窗</div>
     <div class="setRow"><span class="setName">关控制台后显示悬浮窗</span><button class="switch" id="tglFloat" onclick="toggleFloat()" aria-checked="false"></button><button class="mini" id="btnFloatNow" onclick="toggleFloatNow()">立即显示</button></div>
@@ -867,10 +880,7 @@ try{
        第二行 = 日常开关（自启 / 悬浮监控窗 / 暂停缓存）。竖线是分组。
        各功能卡片里只保留与该卡片语境直接相关的动作（清理版本戳、按类型清理、
        探测加速器、更改目录）；测试与诊断类工具全部集中在下方「维护与诊断」卡。 -->
-  <!-- 启动游戏默认用系统默认浏览器打开（系统 PAC 已分流，资源进缓存、接口直连）；
-       V4.5.0 起也可以在 ⚙ 里指定任意程序，届时会把游戏 URL 当参数传给它。
-       注意与 V4.3.6 移除的「独立窗口」模式不同：那个只对 Edge 有效、还要维护一份独立浏览器
-       profile；这里只是换个程序去打开同一个 URL，缓存照样靠系统 PAC 生效。 -->
+  <!-- 全局模式接管系统 PAC；主动模式只注入本次启动的 GBF 浏览器；被动模式由用户手动设置。 -->
   <div class="card" id="actionPanel" style="margin:2px 0 14px">
     <div class="btns actionMain" style="margin:0">
       <span class="actPair">
@@ -915,8 +925,8 @@ try{
         <button onclick="toggleGameEdit(false)">取消</button>
       </div>
       <div class="muted" style="font-size:12px;margin-top:6px">选定后，程序会被这样调用：
-        <code>你选的程序 https://game.granbluefantasy.jp/</code>（工作目录取该程序所在目录）。
-        不指定就用系统默认浏览器 —— 两种方式的缓存效果一样，都靠系统 PAC 分流。</div>
+        <code>你选的程序 [--proxy-pac-url=...] https://game.granbluefantasy.jp/</code>（工作目录取该程序所在目录）。
+        主动模式会额外传入代理参数；全局/被动模式只传 URL。不指定时由系统默认浏览器打开。</div>
     </div>
   </div>
 
@@ -947,7 +957,7 @@ try{
       <div class="btns" style="margin-top:10px">
         <button onclick="clearLogView()">清空显示</button>
         <button onclick="toggleFollow(this)" data-follow="1" class="primary">暂停滚动</button>
-        <button id="btnSelfTestLog" onclick="runSelfTest()">运行自检</button>
+        <button id="btnSelfTestLog" onclick="runSelfTest(this)">运行自检</button>
       </div>
     </div>
 
@@ -1042,13 +1052,13 @@ try{
       </div>
 
       <div class="card" id="proxyCard">
-        <h2>系统代理（与加速器共存）</h2>
+        <h2>代理接入</h2>
         <div class="kv">
-          <span class="k">自动配置脚本</span>
+          <span class="k">代理行为 / 端口</span>
           <span class="v" id="pacState">—</span>
         </div>
         <div class="kv">
-          <span class="k">其余流量去向</span>
+          <span class="k">上游代理</span>
           <span class="v" id="pacUpstream" style="font-size:12px;word-break:break-all">—</span>
         </div>
         <!-- V4.20.8：这里曾有 chainNote（候选被摘除的补注）与更早的 chainWarn 横幅，按用户要求
@@ -1101,12 +1111,12 @@ try{
 
   <!-- ═══ 维护与诊断（V4.14.13）═══════════════════════════════════════════
        把散在各卡片里的测试 / 诊断类按钮全部收进这一张：
-       一键体检（探针 + PAC 分流判定 + 证书，问题直接给一键修复）、诊断包导出、
+       一键体检（探针 + 代理分流判定 + 证书，问题直接给一键修复）、诊断包导出、
        缓存写入 / 完整链路测试、重新扫描、接管检测、自检页与原始数据入口。
        以前它们分住在「缓存库概况」（测试写入/完整缓存/重新扫描/接管检测/自检页/
        原始数据/导出诊断包）和独立的「一键体检」卡里，找起来要满页扫。 -->
   <!-- 一键体检原理（V4.14.8）：探针图在源站不存在，能加载 = 资源请求确实到了本机缓存服务；
-       PAC 判定在本页就地求值；其余各项直接读 /api/stats。证书有问题时给「一键修复」按钮
+       代理分流判定在本页就地求值；其余各项直接读 /api/stats。证书有问题时给「一键修复」按钮
        （POST /api/cert-fix，只动当前用户存储、无需管理员）。 -->
   <div class="card" id="maintCard" style="margin-top:14px">
     <h2 style="display:flex;align-items:center;gap:10px">
@@ -1114,7 +1124,7 @@ try{
       <span class="spacer" style="flex:1"></span>
       <button onclick="runCheckup()" id="btnCheckup" class="primary">开始体检</button>
     </h2>
-    <div class="sideMaintIntro">体检会检查证书、PAC 与探针；下面的工具按用途分组。</div>
+    <div class="sideMaintIntro">体检会检查证书、代理分流与探针；下面的工具按用途分组。</div>
     <div class="btns" style="margin:0 0 10px">
       <!-- 诊断一键导出（V4.14.10）：把健康快照 / 统计 / 日志尾部 / 活配置打成一个 zip（默认放桌面） -->
       <span class="sideMaintLabel">诊断与导出</span>
@@ -1125,7 +1135,7 @@ try{
       <button onclick="testCycle()" id="btnCycle">测试完整缓存</button>
       <span class="sideMaintLabel">接管与页面</span>
       <button onclick="probeExtension()">重新检测接管</button>
-      <a class="btn" href="/test" target="_blank">打开自检页</a>
+      <button onclick="runSelfTest(this)">打开自检页</button>
       <a class="btn maintWide" href="/health" target="_blank">原始数据</a>
     </div>
     <div id="checkupRows" style="font-size:12.5px;color:var(--fg2)"></div>
@@ -1135,7 +1145,7 @@ try{
   </div>
 
   <div id="pageFoot" class="muted" style="text-align:center;padding:6px 0 2px;line-height:1.8">
-    服务与本窗口都可最小化；<b>关闭窗口不影响缓存功能</b>（程序在托盘后台继续）。完全退出请用托盘菜单的「退出」。<br>
+      服务与本窗口都可最小化；<b>关闭窗口不会停止缓存服务</b>（程序在托盘后台继续）。完全退出请用托盘菜单的「退出」；若托盘图标丢失，再双击一次 GBFCache.exe 即可补回。<br>
     碧蓝幻想本地缓存程序 · 仅为复用你本机已有的缓存文件
   </div>
 
@@ -1154,7 +1164,7 @@ try{
         <span class="ic">▤</span><span class="tx"><b>缓存</b><small>缓存库概况 / 缓存目录 / 缓存构成 / 按类型清理</small></span>
       </button>
       <button type="button" class="sideMenuItem" data-side="net" onclick="openSideCategory('net')">
-        <span class="ic">⇄</span><span class="tx"><b>网络</b><small>系统代理 / 命中来源 / 回源耗时</small></span>
+        <span class="ic">⇄</span><span class="tx"><b>网络</b><small>代理接入 / 命中来源 / 回源耗时</small></span>
       </button>
       <button type="button" class="sideMenuItem" data-side="maint" onclick="openSideCategory('maint')">
         <span class="ic">✚</span><span class="tx"><b>维护与诊断</b><small>最近错误 / 体检 / 导出 / 自检</small></span>
@@ -1208,20 +1218,49 @@ var goneHandled = false;
 var pollFails = 0;
 var serverSaidShutdown = false;
 var extOk = null;          // null=未知, true=代理在接管, false=未接管
-// 接管方式：system=占用系统代理（任何浏览器都走缓存）；off=关闭（槽位留给加速器/VPN）。
-var proxyMode = 'system';
-var sysInstalled = false;   // 系统槽位当前是否由本程序接管（注册表事实，/api/stats 下发）
+// active=仅启动 GBF 浏览器时注入代理；passive=不主动接管任何程序。
+var proxyMode = 'active';
+var sysInstalled = false;   // 兼容旧字段：现在表示代理端口是否正在监听
 var proxyLastRequestAt = 0;
+var proxyActiveRecently = false;
+var lastSystemProxy = null;
+var lastUpstreamProbe = null;
 
 function takeoverState() {
-  if (proxyMode === 'off') return 'off';
-  // system 模式的判定以「注册表已接管」这个事实为准；探针图片是在本控制台窗口里跑的，
-  // 该窗口自己的代理配置若不正常会误报失败（实测：探针直连源站 404，而缓存明明在工作），
-  // 所以探针失败只降级为「okprobe」（接管正常但探针未通过），绝不显示「未接管」。
+  if (proxyMode === 'passive') {
+    if (!sysInstalled) return 'off';
+    return proxyActiveRecently ? 'passive-active' : 'passive';
+  }
   if (!sysInstalled) return 'off';
   if (extOk === true) return 'ok';
   if (extOk === false) return 'okprobe';
   return 'unknown';
+}
+
+function renderUpstreamStatus() {
+  var p = lastSystemProxy || {};
+  var probe = lastUpstreamProbe || {};
+  var addr = (probe.active && probe.proxy) || p.upstream || '';
+  var liveness = probe.liveness || {};
+  var dead = !!(p.upstreamDead || liveness.alive === false);
+  var portMatch = /:(\d+)$/.exec(addr);
+  var port = portMatch ? portMatch[1] : addr;
+  var dot = $('upstreamDot');
+  var txt = $('upstreamTxt');
+  var box = $('upstreamStatus');
+  if (!dot || !txt || !box) return;
+
+  if (!addr) {
+    dot.className = 'dot idle';
+    txt.textContent = '上游 直连';
+    box.title = '没有可用的上游代理，未命中资源将直接回源';
+    return;
+  }
+  dot.className = 'dot ' + (dead ? 'off' : 'on');
+  txt.textContent = dead ? '上游 ' + port + ' 失败' : '上游 ' + port;
+  var source = probe.from || p.upstreamFrom || '';
+  box.title = '实际回源上游：' + addr + (source ? '（来源：' + source + '）' : '')
+    + (dead ? '，当前检测不可用' : '');
 }
 
 /* ---------------- 根证书位置提示（V4.3.5 新增） ----------------
@@ -1321,11 +1360,15 @@ function toggleFollow(btn) {
 function renderStats(d) {
   lastData = d;
   var s = d.stats || {};
-  // 同步接管方式与「最近有没有请求经过代理」
-  if (d.systemProxy && d.systemProxy.mode) proxyMode = d.systemProxy.mode;
-  if (d.systemProxy) sysInstalled = !!d.systemProxy.installed;
+  // 同步代理接入方式与「最近有没有请求经过代理」
+  var access = d.proxyAccess || d.systemProxy || {};
+  if (access.mode) proxyMode = access.mode;
+  sysInstalled = proxyMode === 'global'
+    ? (!!access.installed && !!access.listening)
+    : !!access.listening;
   if (d.proxy) {
     proxyLastRequestAt = d.proxy.lastRequestAt || 0;
+    proxyActiveRecently = !!d.proxy.activeRecently;
   }
   // 根证书位置：装错存储（例如装进「中间证书颁发机构」）浏览器一律不认 ——
   // 症状是资源全部加载失败、缓存几乎不增长，而界面此前毫无提示（真实案例排查了很久）。
@@ -1399,32 +1442,42 @@ function renderStats(d) {
   var reqs = (s.hit || 0) + (s.miss || 0);
   var tk = takeoverState();
   var bClass = 'hint', bHtml = '';
-  if (tk === 'off' && proxyMode === 'off') {
-    bHtml = '<b>缓存接管已关闭</b> —— 配置里 <code>pacMode</code> 为 <code>off</code>，没有任何窗口走缓存。';
-  } else if (tk === 'off' && d.systemProxy && d.systemProxy.foreign && d.systemProxy.foreign.url) {
-    // 槽位被别的程序占着，而且我们没能从它那份 PAC 里提取出可串接的本机代理 —— 于是主动让位。
-    // 这种情况必须说清「谁占着 / 为什么不让 / 接下来怎么办」：旧文案让人去"检查自动配置脚本
-    // 是否指向本程序"，而事实是它指向别人、且是我们**主动不动它**，那句话只会把人带偏。
-    var fp = d.systemProxy.foreign;
+  var gameExe = String((d.game && d.game.path) || '').replace(/\//g, '\\').toLowerCase();
+  var consoleExe = String((d.consoleBrowser && d.consoleBrowser.path) || '').replace(/\//g, '\\').toLowerCase();
+  var activeBrowserConflict = proxyMode === 'active' && gameExe && consoleExe && gameExe === consoleExe;
+  if (activeBrowserConflict) {
+    bClass = 'hint err';
+    bHtml = '<b>主动模式配置冲突</b> —— “控制台浏览器”和“GBF 游戏浏览器”是同一个程序。'
+      + '控制台打开期间该浏览器一定已经在运行，主动模式无法再给已运行实例注入代理。'
+      + '请把“控制台浏览器”改成 Edge、Chrome 等另一个浏览器，再完全退出 GBF 浏览器后启动游戏。';
+  } else if (tk === 'passive-active') {
+    bClass = 'hint ok';
+    bHtml = '<b>被动模式工作正常</b> —— 最近已有 GBF 流量经过本地代理。'
+      + '该模式不接管任何程序，只处理用户手动配置到端口 '
+      + '<code>127.0.0.1:' + escapeHtml(String(access.proxyPort || 8899)) + '</code> 的流量。';
+  } else if (tk === 'passive') {
+    bClass = 'hint';
+    bHtml = '<b>被动模式：不接管任何程序</b> —— 请在指定 GBF 浏览器的代理设置中填写 ' +
+      '<code>127.0.0.1:' + escapeHtml(String(access.proxyPort || 8899)) + '</code>（HTTP 与 HTTPS）。' +
+      '未手动设置时不会经过缓存，其他程序也不会受影响。';
+  } else if (proxyMode === 'global' && tk === 'off') {
     bClass = 'hint warn';
-    bHtml = '<b>缓存没生效：系统「自动配置脚本」被别的程序占用了</b><br>' +
-      '占用者：<code>' + escapeHtml(fp.url) + '</code><br>' +
-      '本程序为免与加速器互抢，<b>没有去动它</b>；而这份 PAC 里没有可串接的本机代理，' +
-      '所以游戏请求不经过本机代理、缓存不会生效。<br>' +
-      '<span class="muted">没有接管它的原因：' + escapeHtml(fp.reason || '未知') + '</span><br>' +
-      '<b>可选做法（任选一条即可）</b>：① <b>把加速器改成「静态代理 / 全局代理」模式</b> —— ' +
-      '本程序能自动识别并串接它，缓存与加速并用（<b>首选</b>）；② 在占用它的程序里关掉「系统代理 / PAC」，' +
-      '然后重启本程序；③ 若它不依赖 PAC（TUN 网卡 / 路由模式），可加载随包的 ' +
-      '<code>console-extension</code>（浏览器层优先级高于系统设置）；④ 确认不再需要它时，再手动清空该槽位。';
+    bHtml = access.listenError
+      ? '<b>全局模式代理端口未监听</b> —— ' + escapeHtml(access.listenError)
+      : '<b>全局模式尚未接管系统代理</b> —— ' +
+        (access.foreign && access.foreign.url
+          ? '系统 PAC 正被其他程序占用：<code>' + escapeHtml(access.foreign.url) + '</code>。本程序已让位。'
+          : '请检查系统代理权限与启动日志。');
+  } else if (proxyMode === 'global' && tk === 'okprobe' && reqs === 0) {
+    bHtml = '<b>全局模式已接管系统代理（探针未通过）</b> —— 浏览器已切换到本程序 PAC，' +
+      '但当前控制台窗口的探针没有走通；请结合「命中/回源」数字判断。';
   } else if (tk === 'off') {
     bClass = 'hint err';
-    bHtml = '<b>未接管缓存</b> —— 游戏请求没有经过本机代理，浏览器正直接连源站。' +
-      '请先确认程序正在运行，然后重启浏览器；若仍不行，检查系统「自动配置脚本」是否指向 http://127.0.0.1:8799/proxy.pac' +
-      '，' +
-      '改好后点右侧「重新检测」。';
+    bHtml = '<b>代理端口未监听</b> —— 请检查启动日志与端口占用：' +
+      escapeHtml(access.listenError || ('127.0.0.1:' + (access.proxyPort || 8899)));
   } else if (tk === 'okprobe' && reqs === 0) {
-    bHtml = '<b>接管正常（探针未通过）</b> —— 系统「自动配置脚本」已指向本程序，但本控制台窗口自己的探针图片没有走通' +
-      '（这个窗口的代理配置可能不经过本机代理）。<b>判断真实状态请看下方「命中/回源」数字</b>：游戏在玩、数字在涨就是正常的。';
+    bHtml = '<b>主动模式已启用（探针未通过）</b> —— 代理只会注入由本程序启动的 GBF 浏览器；' +
+      '当前控制台窗口不一定经过该代理。<b>判断真实状态请看「命中/回源」数字</b>。';
   } else if (!connected) {
     bClass = 'hint err';
     bHtml = '<b>与服务断开</b> —— 程序可能已退出，或正在重启中。若已退出，从右下角托盘图标重新启动即可。';
@@ -1439,9 +1492,10 @@ function renderStats(d) {
     bHtml = '<b>工作正常</b> —— 正在拦截并复用本地缓存（实时数字见上方指标卡）。';
   } else if (tk === 'ok') {
     bClass = 'hint ok';
-    bHtml = '<b>缓存接管正常</b> —— 当前没有请求是<b>正常现象</b>：' +
-      '游戏资源已经全部命中<b>浏览器自身的缓存</b>，不需要再发起网络请求，这是最理想的状态。<br>' +
-      '<span class="muted">本次运行统计为 0 只是因为服务刚启动；换个地图、打开新关卡，或点「运行自检」就会看到请求。</span>';
+    bHtml = proxyMode === 'global'
+      ? '<b>全局模式已启用</b> —— 系统 PAC 已由本程序接管，按浏览器系统代理设置生效；其它流量交给上游代理或直连。'
+      : '<b>主动模式已启用</b> —— 只影响由「启动游戏」打开的 GBF 浏览器，不修改系统代理或其他程序。' +
+        '当前没有请求是正常现象；游戏资源也可能已经命中浏览器自身缓存。';
   } else {
     bHtml = '正在检测缓存接管状态…';
   }
@@ -1455,17 +1509,19 @@ function renderStats(d) {
   if (d.cache) renderCache(d.cache);
   renderSources(d);
   renderEvict(d);
-  if (d.systemProxy) renderSystemProxy(d.systemProxy, d.upstreamProbe);
+  if (access) lastSystemProxy = access;
+  if (d.upstreamProbe) lastUpstreamProbe = d.upstreamProbe;
+  if (access) renderSystemProxy(access, d.upstreamProbe);
+  if (lastSystemProxy || lastUpstreamProbe) renderUpstreamStatus();
   renderExtBadge();          // 徽章也跟着轮询刷新，免得和上方横幅说法不一致
   renderErrors(d.recentErrors || []);
 }
 
-// 系统代理（PAC）状态：与加速器共存的可见性入口。
-// 「其余流量去向」显示的是探测到的加速器代理；为空说明没探测到，
-// 非 GBF 流量会直连 —— 此时若开着加速器仍无加速，说明它用的不是静态代理。
+// 代理接入状态。global 接管系统代理；active 只给本程序启动的 GBF 浏览器注入代理；
+// passive 不接管任何程序。
 function renderSystemProxy(p, probe) {
   // V4.12.0：签名没变就不重绘（这几行的值平时几乎不变）；V4.14.9 加入 bypass；V4.20.5 加入存活结论
-  var sig = [p.mode, p.installed, p.autoConfig, p.upstream, p.bypass, p.upstreamDead,
+  var sig = [p.mode, p.installed, p.proxyPort, p.upstream, p.bypass, p.upstreamDead,
     probe && probe.active, probe && probe.proxy].join('|');
   if (!sigChanged('sysproxy', sig)) return;
 
@@ -1474,17 +1530,20 @@ function renderSystemProxy(p, probe) {
   var ch = $('pacChain');
   var bb = $('btnBypass');
 
-  // 接管方式：system=占用系统槽位；off=不占用（槽位留给加速器/VPN）
-  var mode = p.mode || 'system';
-  if (mode !== 'system') {
-    st.innerHTML = '<span class="bad">已关闭</span>';
-    up.innerHTML = '<span class="dim">—</span>';
+  var mode = p.mode || 'active';
+  if (mode === 'passive') {
+    st.innerHTML = p.listening
+      ? '<span class="ok">被动模式 · 端口监听中</span>'
+      : '<span class="bad">被动模式 · 端口未监听</span>';
+    up.innerHTML = p.upstream && !p.upstreamDead
+      ? '上游 <b>' + escapeHtml(p.upstream) + '</b>'
+      : '<span class="dim">直连</span>';
     if (ch) {
       ch.innerHTML = probe && probe.active
         ? '<span class="ok">是</span> <b>' + probe.proxy + '</b>'
         : '<span class="dim">否（直连回源）</span>';
     }
-    if (bb) bb.style.display = 'none';   // 接管本来就是关的，没有"暂停"可言
+    if (bb) bb.style.display = 'none';
     return;
   }
 
@@ -1495,21 +1554,23 @@ function renderSystemProxy(p, probe) {
   }
 
   if (p.bypass) {
-    st.innerHTML = '<span class="wait">临时直连中（缓存已暂停）</span>';
+    st.innerHTML = '<span class="wait">缓存暂停（代理透明转发）</span>';
+  } else if (mode === 'global' && !p.listening) {
+    st.innerHTML = '<span class="bad">全局模式 · 代理端口未监听</span>';
   } else if (p.installed) {
-    st.innerHTML = '<span class="ok">已接管</span>';
-  } else if (p.autoConfig) {
-    st.innerHTML = '<span class="wait">槽位被占用，已让位</span>';
+    st.innerHTML = mode === 'global'
+      ? '<span class="ok">全局模式 · 已接管系统代理</span>'
+      : '<span class="ok">主动模式 · 端口监听中</span>';
   } else {
-    st.innerHTML = '<span class="bad">未接管</span>';
+    st.innerHTML = mode === 'global'
+      ? '<span class="bad">全局模式 · 未接管系统 PAC</span>'
+      : '<span class="bad">端口未监听</span>';
   }
 
   // V4.20.8：只讲结果 —— 走了加速器就报地址，否则就是"直连"/"否"。
   // 来源与未命中的原因都不显示：原因与时间线在服务端日志的 `[链路]` 行。
   if (p.upstream && !p.upstreamDead) {
     up.innerHTML = '加速器 <b>' + escapeHtml(p.upstream) + '</b>';
-  } else if (!p.installed && p.autoConfig) {
-    up.innerHTML = '<span class="dim">' + escapeHtml(p.autoConfig) + '</span>';
   } else {
     up.innerHTML = '<span class="dim">直连</span>';
   }
@@ -1552,9 +1613,8 @@ function togglePacBypass(btn) {
     .catch(function () { btn.disabled = false; });
 }
 
-// 启动游戏：默认用系统默认浏览器打开（系统 PAC 已分流）。V4.5.0 起可指定程序：
-// 配了 gameLaunchPath 就启动那个 exe 并把游戏 URL 当参数传给它（用途：指定某个浏览器，
-// 或任何自己写的启动包装程序）；没配就还是默认浏览器。⚙ 齿轮展开路径编辑（浏览/保存/清空）。
+// 启动游戏：主动模式只给本次启动的 GBF 浏览器注入代理；全局/被动模式不注入。
+// ⚙ 齿轮展开路径编辑（浏览/保存/清空）。
 
 // 「启动加速器」：按下直接拉起配置的 exe；⚙ 齿轮展开路径编辑（浏览/保存）。
 var accelPath = '';
@@ -1734,18 +1794,19 @@ function launchGame(btn) {
     btn.disabled = false;
     btn.textContent = old;
     if (d.ok) {
-      if (d.target === 'custom') {
-        hint.textContent = d.pending
-          ? '已交给系统，可能在等 UAC 确认…'
-          : ('已启动：用 ' + (d.program || '指定程序') + ' 打开游戏（缓存靠系统 PAC 分流生效）');
-      } else {
-        hint.textContent = '已启动：游戏会在你的默认浏览器里打开（系统 PAC 分流：资源走缓存、接口直连）。';
-      }
+      var target = d.program || (d.target === 'default' ? '系统默认浏览器' : 'GBF 浏览器');
+      if (d.pending) hint.textContent = '已交给系统，可能在等 UAC 确认…';
+      else if (d.proxied) hint.textContent = '已启动：' + target + '，仅此浏览器实例使用代理 ' + d.proxy + '。';
+      else if (d.globallyProxied) hint.textContent = '已启动：' + target + '；全局模式已通过系统 PAC 接管代理。';
+      else hint.textContent = '已启动：' + target + '。被动模式未注入代理，请确认浏览器已手动设置代理。';
       setTimeout(function () { hint.textContent = ''; }, 8000);
     } else if (d.code === 'BAD_PATH') {
       // 指定的程序不在了：直接展开 ⚙ 让用户重选或清空，别只丢一句错
       hint.textContent = d.error;
       toggleGameEdit(true);
+    } else if (d.code === 'BROWSER_RUNNING' || d.code === 'UNSUPPORTED_BROWSER') {
+      hint.textContent = d.error;
+      alert(d.error);
     } else {
       hint.textContent = '启动失败：' + (d.error || '未知错误');
     }
@@ -2117,8 +2178,19 @@ function rescan() {
     setTimeout(function () { b.disabled = false; b.textContent = '重新扫描'; }, 1500);
   });
 }
-function runSelfTest() {
-  window.open('/test', '_blank');
+function runSelfTest(btn) {
+  var old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '打开中…'; }
+  fetch('/api/open-self-test', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+      if (!d.ok) alert('打开自检页失败：' + (d.error || '未知错误'));
+    })
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+      alert('打开自检页失败：' + e.message);
+    });
 }
 
 /* ---------------- 按类型清理缓存 ---------------- */
@@ -2332,19 +2404,24 @@ function renderCycleResult(r) {
 function renderExtBadge() {
   var dot = $('extDot'), txt = $('extTxt');
   var tk = takeoverState();
-  // system 模式看探针时间；off 模式探针不跑，退回「最近一次经过代理的请求时间」
-  var when = proxyMode === 'system' ? fmtClock(lastProbeAt) : fmtClock(proxyLastRequestAt);
+  // global/active 看探针时间；被动模式看最近一次真实经过代理的请求时间。
+  var when = proxyMode === 'passive' ? fmtClock(proxyLastRequestAt) : fmtClock(lastProbeAt);
   if (!sigChanged('badge', tk + '|' + when)) return;   // V4.12.0：没变化不写 DOM
   if (tk === 'ok') {
     dot.className = 'dot on';
-    txt.textContent = '缓存接管正常' + when;
+    txt.textContent = (proxyMode === 'global' ? '全局接管正常' : '主动代理已启用') + when;
   } else if (tk === 'okprobe') {
-    // system 模式：注册表已接管，只是本窗口的探针图片没走通 —— 不影响真实缓存
     dot.className = 'dot on';
-    txt.textContent = '缓存接管正常（探针未通过，不影响使用）' + when;
+    txt.textContent = (proxyMode === 'global' ? '全局接管正常（探针未通过）' : '主动代理已就绪') + when;
+  } else if (tk === 'passive-active') {
+    dot.className = 'dot on';
+    txt.textContent = '被动模式 · 已收到代理流量' + when;
+  } else if (tk === 'passive') {
+    dot.className = 'dot idle';
+    txt.textContent = '被动模式 · 未接管程序' + when;
   } else if (tk === 'off') {
     dot.className = 'dot off';
-    txt.textContent = (proxyMode === 'off' ? '缓存接管已关闭' : '未接管缓存') + when;
+    txt.textContent = (proxyMode === 'global' ? '系统代理未接管' : '代理端口未监听') + when;
   } else {
     dot.className = 'dot idle';
     txt.textContent = '状态未知' + when;
@@ -2357,9 +2434,8 @@ var probeRetryTimer = null;
 var probeTimeoutTimer = null;
 
 function probeExtension() {
-  // 只有 system 模式需要探针：off 模式下没有任何窗口走代理，探针必然失败，
-  // 那会把「已关闭」误显示成「未接管」。
-  if (proxyMode !== 'system') {
+  // global/active 可主动验证；被动模式没有固定浏览器实例。
+  if (proxyMode === 'passive') {
     extOk = null;
     renderExtBadge();
     renderStats(lastData || {});
@@ -2469,19 +2545,22 @@ function runCheckup() {
   fetch('/api/stats', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
     var out = '';
     out += ckRowHtml('服务', 'ok', '在线（' + escapeHtml(String(d.appVersion || '?')) + '）');
-    // 接管状态（pacMode=off / 临时直连是"配置如此"，用黄色；真故障才是红色）
-    var sp = d.systemProxy || {};
-    if (sp.mode && sp.mode !== 'system') {
-      out += ckRowHtml('接管', 'wait', '按配置让位（pacMode=' + escapeHtml(sp.mode) + '，缓存接管已关闭）');
+    // 代理接入状态
+    var sp = d.proxyAccess || d.systemProxy || {};
+    if (sp.mode === 'passive') {
+      out += ckRowHtml('代理', 'wait', '被动模式：不接管任何程序；请手动填写 127.0.0.1:' + escapeHtml(String(sp.proxyPort || 8899)));
+    } else if (sp.mode === 'global' && !sp.listening) {
+      out += ckRowHtml('代理', 'bad', '全局模式：代理端口未监听：' + escapeHtml(sp.listenError || ('127.0.0.1:' + (sp.proxyPort || 8899))));
+    } else if (sp.mode === 'global' && sp.foreign && sp.foreign.url) {
+      out += ckRowHtml('代理', 'bad', '全局模式：系统 PAC 被其他程序占用，本程序已让位：' + escapeHtml(sp.foreign.url));
+    } else if (sp.mode === 'global' && sp.installed) {
+      out += ckRowHtml('代理', 'ok', '全局模式：已接管系统「自动配置脚本」，对所有浏览器生效');
     } else if (sp.bypass) {
-      out += ckRowHtml('接管', 'wait', '临时直连中（缓存已暂停，点「恢复缓存接管」恢复）');
-    } else if (sp.installed) {
-      out += ckRowHtml('接管', 'ok', '已接管系统「自动配置脚本」');
-    } else if (sp.foreign && sp.foreign.url) {
-      out += ckRowHtml('接管', 'bad', '槽位被其他程序占用：<code>' + escapeHtml(sp.foreign.url) + '</code>　' +
-        escapeHtml(sp.foreign.reason || '') + '　可选：把加速器改为「静态代理」模式让本程序串接，或在其设置里关闭系统代理');
+      out += ckRowHtml('代理', 'wait', (sp.mode === 'global' ? '全局' : '主动') + '模式 · 缓存已暂停，代理仍在透明转发');
+    } else if (sp.listening) {
+      out += ckRowHtml('代理', 'ok', '主动模式：仅 GBF-Cache 启动的 GBF 浏览器使用 127.0.0.1:' + escapeHtml(String(sp.proxyPort || 8899)));
     } else {
-      out += ckRowHtml('接管', 'bad', '未接管（自动配置脚本为空）');
+      out += ckRowHtml('代理', 'bad', '代理端口未监听：' + escapeHtml(sp.listenError || ('127.0.0.1:' + (sp.proxyPort || 8899))));
     }
     // 根证书：有问题且拿得到修复命令时，直接给一键修复按钮
     var c = d.cert || {};
@@ -2695,10 +2774,213 @@ function renderSettings(s) {
   setSwitch('swAutoEvict', s.autoEvictStamps);
   setSwitch('swNotify', s.prewarmNotify);
   setSwitch('btnBypass', s.cacheEnabled);
+  renderProxyAccess(s);
+  renderManualUpstream(s);
   var note = $('cacheStateNote');
   if (note) note.textContent = s.cacheEnabled ? '' : '（暂停中）';
   setSwitch('tglFloat', s.floatOnConsoleClose);
   setSwitch('swLightTheme', document.body.classList.contains('light'));   // 主题是本浏览器偏好，随面板刷新保持同步
+}
+
+/* 代理接入：global 接管系统代理；active 只影响本程序启动的 GBF 浏览器；
+   passive 不接管任何程序。 */
+var proxyBehavior = 'active';
+
+function renderProxyAccess(s) {
+  proxyBehavior = s.proxyMode === 'global' ? 'global'
+    : (s.proxyMode === 'passive' ? 'passive' : 'active');
+  var active = $('proxyModeActive');
+  var passive = $('proxyModePassive');
+  var globalMode = $('proxyModeGlobal');
+  if (active) active.className = 'mini' + (proxyBehavior === 'active' ? ' on' : '');
+  if (passive) passive.className = 'mini' + (proxyBehavior === 'passive' ? ' on' : '');
+  if (globalMode) globalMode.className = 'mini' + (proxyBehavior === 'global' ? ' on' : '');
+
+  var input = $('proxyPortInput');
+  if (input && document.activeElement !== input && s.proxyPort) input.value = s.proxyPort;
+
+  var modeHint = $('proxyModeHint');
+  if (modeHint) {
+    if (proxyBehavior === 'global') {
+      modeHint.textContent = '接管 Windows 系统「自动配置脚本」，对所有遵循系统代理的浏览器生效。原有加速器 PAC 会尝试串接；占用冲突时会让位。';
+    } else if (proxyBehavior === 'passive') {
+      modeHint.textContent = '不接管任何程序。请在指定 GBF 浏览器的代理设置中填写 HTTP/HTTPS 127.0.0.1:'
+        + (s.effectiveProxyPort || 8899) + '。若刚从其它模式切换，请重开已启动的 GBF 浏览器。';
+    } else {
+      modeHint.textContent = '只给「启动游戏 / 运行自检」打开的 GBF 浏览器注入代理，不修改系统代理或其他浏览器；启动前需完全退出该浏览器。';
+    }
+    var gameExe = String(s.gameLaunchPath || '').replace(/\//g, '\\').toLowerCase();
+    var consoleExe = String(s.consoleBrowserPath || '').replace(/\//g, '\\').toLowerCase();
+    if (proxyBehavior === 'active' && gameExe && consoleExe && gameExe === consoleExe) {
+      modeHint.textContent = '当前“控制台浏览器”和“GBF 游戏浏览器”是同一个程序。控制台打开时该浏览器必然在运行，'
+        + '主动模式无法给已运行实例注入代理。请把控制台浏览器改成 Edge、Chrome 等另一个浏览器，'
+        + '再完全退出 GBF 浏览器后启动游戏。';
+      modeHint.style.color = 'var(--err)';
+    } else {
+      modeHint.style.color = '';
+    }
+  }
+
+  var portHint = $('proxyPortHint');
+  if (portHint) {
+    var port = s.effectiveProxyPort || s.proxyPort || 8899;
+    if (s.proxyPortSource === 'environment') {
+      portHint.textContent = '当前监听 ' + port + '，由启动环境变量 GBFCACHE_PROXY_PORT 覆盖；界面保存的端口需移除环境变量后才生效。';
+      portHint.style.color = 'var(--err)';
+    } else if (s.proxyRestartRequired) {
+      portHint.textContent = '已保存新端口，当前仍监听 ' + port + '；请重启 GBF-Cache，已启动的 GBF 浏览器也建议重开。';
+      portHint.style.color = 'var(--err)';
+    } else {
+      portHint.textContent = '当前监听 127.0.0.1:' + port + '（修改后需重启）。';
+      portHint.style.color = '';
+    }
+  }
+}
+
+function setProxyMode(mode) {
+  if (mode !== 'active' && mode !== 'passive' && mode !== 'global') return;
+  var a = $('proxyModeActive');
+  var p = $('proxyModePassive');
+  var g = $('proxyModeGlobal');
+  if (a) a.disabled = true;
+  if (p) p.disabled = true;
+  if (g) g.disabled = true;
+  fetch('/api/set-proxy-mode?mode=' + encodeURIComponent(mode), { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (a) a.disabled = false;
+      if (p) p.disabled = false;
+      if (g) g.disabled = false;
+      if (!d.ok) return alert('保存代理行为失败：' + (d.error || '未知错误'));
+      renderProxyAccess(d.settings || {});
+      loadInitial();
+    })
+    .catch(function (e) {
+      if (a) a.disabled = false;
+      if (p) p.disabled = false;
+      if (g) g.disabled = false;
+      alert('保存代理行为失败：' + e.message);
+    });
+}
+
+function saveProxyPort() {
+  var input = $('proxyPortInput');
+  var btn = $('btnProxyPortSave');
+  var raw = input ? String(input.value || '').trim() : '';
+  var port = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+  if (!(port >= 1 && port <= 65535)) {
+    var hint = $('proxyPortHint');
+    if (hint) { hint.textContent = '端口必须是 1~65535 的整数。'; hint.style.color = 'var(--err)'; }
+    return;
+  }
+  if (btn) btn.disabled = true;
+  fetch('/api/set-proxy-port?port=' + encodeURIComponent(port), { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) btn.disabled = false;
+      if (!d.ok) {
+        var h = $('proxyPortHint');
+        if (h) { h.textContent = d.error || '保存失败'; h.style.color = 'var(--err)'; }
+        return;
+      }
+      renderProxyAccess(d.settings || {});
+    })
+    .catch(function (e) {
+      if (btn) btn.disabled = false;
+      var h = $('proxyPortHint');
+      if (h) { h.textContent = '保存失败：' + e.message; h.style.color = 'var(--err)'; }
+    });
+}
+
+/* 手动 HTTP 上游代理：开启时只使用 127.0.0.1:<port>，关闭时恢复自动探测。 */
+var manualUpstreamEnabled = false;
+
+function manualUpstreamPort() {
+  var el = $('manualUpstreamPort');
+  var raw = el ? String(el.value || '').trim() : '';
+  if (!/^\d+$/.test(raw)) return null;
+  var port = parseInt(raw, 10);
+  return port >= 1 && port <= 65535 ? port : null;
+}
+
+function showManualUpstreamHint(msg, bad) {
+  var el = $('manualUpstreamHint');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = bad ? 'var(--err)' : '';
+}
+
+function renderManualUpstream(s) {
+  manualUpstreamEnabled = !!s.manualUpstreamEnabled;
+  setSwitch('swManualUpstream', manualUpstreamEnabled);
+  var input = $('manualUpstreamPort');
+  if (input && document.activeElement !== input && s.manualUpstreamPort) {
+    input.value = s.manualUpstreamPort;
+  }
+  var probeBtn = $('btnProbeUp');
+  if (probeBtn) {
+    probeBtn.disabled = manualUpstreamEnabled;
+    probeBtn.title = manualUpstreamEnabled ? '手动上游代理开启时不运行自动探测' : '';
+  }
+  if (manualUpstreamEnabled && s.manualUpstreamPort) {
+    showManualUpstreamHint('已开启：固定使用 HTTP 127.0.0.1:' + s.manualUpstreamPort + ' 回源，不再自动选择其他代理。', false);
+  } else if (s.manualUpstreamPort) {
+    showManualUpstreamHint('已关闭：保持自动检测；端口 ' + s.manualUpstreamPort + ' 已记住。', false);
+  } else {
+    showManualUpstreamHint('关闭时保持现有自动探测；填写端口后可开启。', false);
+  }
+}
+
+function setManualUpstream(enabled, port) {
+  var btn = $('swManualUpstream');
+  var save = $('btnManualUpstreamSave');
+  if (btn) btn.disabled = true;
+  if (save) save.disabled = true;
+  var q = '/api/set-manual-upstream?enabled=' + (enabled ? '1' : '0');
+  if (port) q += '&port=' + encodeURIComponent(port);
+  fetch(q, { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) btn.disabled = false;
+      if (save) save.disabled = false;
+      if (!d.ok) {
+        if (btn) setSwitch('swManualUpstream', manualUpstreamEnabled);
+        showManualUpstreamHint(d.error || '保存失败', true);
+        return;
+      }
+      renderManualUpstream(d.settings || {});
+    })
+    .catch(function (e) {
+      if (btn) btn.disabled = false;
+      if (save) save.disabled = false;
+      if (btn) setSwitch('swManualUpstream', manualUpstreamEnabled);
+      showManualUpstreamHint('保存失败：' + e.message, true);
+    });
+}
+
+function toggleManualUpstream(btn) {
+  var enable = btn.getAttribute('aria-checked') !== 'true';
+  if (!enable) {
+    setManualUpstream(false, null);
+    return;
+  }
+  var port = manualUpstreamPort();
+  if (!port) {
+    showManualUpstreamHint('请先填写 1~65535 的端口，再开启手动上游代理。', true);
+    var input = $('manualUpstreamPort');
+    if (input) input.focus();
+    return;
+  }
+  setManualUpstream(true, port);
+}
+
+function saveManualUpstreamPort() {
+  var port = manualUpstreamPort();
+  if (!port) {
+    showManualUpstreamHint('上游代理端口必须是 1~65535 的整数。', true);
+    return;
+  }
+  setManualUpstream(manualUpstreamEnabled, port);
 }
 
 /* 控制台浏览器（V4.21.0）：空 = 默认（优先 Edge 应用模式）。

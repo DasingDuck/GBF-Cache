@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "碧蓝幻想缓存控制台",
-  "version": "2.0.0",
-  "description": "碧蓝幻想本地缓存的浏览器伴侣，一个扩展全包：点击图标在侧边栏看实时控制台；把浏览器代理跟随服务端 PAC；程序随浏览器启动/退出（需先运行 register-native-host.ps1 注册，未注册时其余功能不受影响）。v2.0.0 合并了原代理扩展（edge-extension），固定 key 沿用之，扩展 ID 不变。",
+  "version": "2.1.0",
+  "description": "碧蓝幻想本地缓存的浏览器伴侣：点击图标在侧边栏看实时控制台；程序可随浏览器启动/退出。v2.1.0 起扩展不再修改浏览器代理，代理仅由启动模式或用户手动设置接入，固定 key 与扩展 ID 保持不变。",
   "minimum_chrome_version": "114",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq1NC0gA9ZT6lahi6D0Yx3rryhPqYiDR064Lxq5PsHdBDOOqrzOcCTEMV6k5MOns1BQpG+oyZjtmg1iJJqEniku3F6tKIw4BaRgpwABx8zPg2zQXJ+SAVsUfO9eIrnpjfhZe2KvH0OeOFr/cJ7ZMFB5EZZJNQ22fzYvZzvVkt+uvOi41CRjJNouu7uY0F5edK+X0shfinW2jHXaW59Uqp3/bLhJ46D+ZAMFd39omXT1++SgBbJQKqxqkP967R3UgHYbD1K2wmtEWVNNpuZO0zlXmpqIkq+LEAj7DwdPN0UVLbYTEF9z+RQsAH8BpiBxqFLc0y/I0k1TRK8CGNjl8sHwIDAQAB",
   "permissions": [
@@ -18,7 +18,7 @@
     "service_worker": "sw.js"
   },
   "action": {
-    "default_title": "碧蓝幻想缓存控制台（点击打开侧栏；代理异常时图标带 ! 徽标）",
+    "default_title": "碧蓝幻想缓存控制台（点击打开侧栏；扩展不接管代理）",
     "default_icon": {
       "16": "icon.png",
       "32": "icon.png",

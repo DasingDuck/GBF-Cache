@@ -50,12 +50,17 @@ public class WinApi {
 '@
 
 $Dir      = Split-Path -Parent $MyInvocation.MyCommand.Path
-$NodeJs   = Join-Path $Dir 'server.js'
 $IconOn   = Join-Path $Dir 'icon.ico'
 $IconOff  = Join-Path $Dir 'icon-off.ico'
 $LogFile  = Join-Path $Dir 'logs\server.log'
 $TrayLog  = Join-Path $Dir 'logs\tray.log'
 $Port     = 8799
+try {
+    if ($env:GBFCACHE_PORT) {
+        $p = [int]$env:GBFCACHE_PORT
+        if ($p -ge 1 -and $p -le 65535) { $Port = $p }
+    }
+} catch {}
 $BaseUrl  = "http://127.0.0.1:$Port/"
 $WinTitle = '碧蓝幻想本地缓存程序'
 # 悬浮监控窗（V4.14.0）：无边框、不占任务栏的圆角条，六格显示关键计数。
@@ -87,12 +92,21 @@ try {
 
     # ------------------------------------------------------------ 环境探测
 
-    function Find-Node {
+    function Find-Server {
+        # 发行版优先使用同目录的 GBFCache.exe；源码版才回退到 Node.js。
+        $packaged = Join-Path $Dir 'GBFCache.exe'
+        if (Test-Path -LiteralPath $packaged) {
+            return @{ Exe = $packaged; Args = @(); Kind = 'packaged' }
+        }
         $cand = @()
         $c = Get-Command node -ErrorAction SilentlyContinue
         if ($c) { $cand += $c.Source }
         $cand += 'H:\DevTools\nodejs\node-v24.21.0-win-x64\node.exe'
-        foreach ($p in $cand) { if ($p -and (Test-Path $p)) { return $p } }
+        foreach ($p in $cand) {
+            if ($p -and (Test-Path -LiteralPath $p)) {
+                return @{ Exe = $p; Args = @('server.js'); Kind = 'node' }
+            }
+        }
         return $null
     }
 
@@ -121,19 +135,22 @@ try {
         return $null
     }
 
-    $NodeExe = Find-Node
+    $Server = Find-Server
+    $ServerExe = if ($Server) { [string]$Server.Exe } else { '' }
+    $ServerArgs = if ($Server) { @($Server.Args) } else { @() }
     $ConsoleBrowserAtStart = Find-ConsoleBrowser
-    Trace "Node = $NodeExe | ConsoleBrowser = $ConsoleBrowserAtStart"
+    Trace "Server = $ServerExe | ConsoleBrowser = $ConsoleBrowserAtStart"
 
     # V4.18.2：重启中转用的两条小料（Restart-Server 用）——
     #   · $ServerStartCmd：交给独立中转进程执行的启动命令（字符串，独立于本进程存活）；
     #   · $RestartPidFile：中转进程把新服务的 pid 写进去，重启后本进程据此捡回句柄。
-    $ServerStartCmd = "Start-Process -FilePath '$NodeExe' -ArgumentList 'server.js' -WorkingDirectory '$Dir' -WindowStyle Hidden -PassThru"
+    $serverArgList = if ($ServerArgs.Count) { " -ArgumentList '" + ($ServerArgs -join "','") + "'" } else { '' }
+    $ServerStartCmd = "Start-Process -FilePath '$ServerExe'" + $serverArgList + " -WorkingDirectory '$Dir' -WindowStyle Hidden -PassThru"
     $RestartPidFile = Join-Path (Split-Path $TrayLog) 'restart.pid'
 
-    if (-not $NodeExe) {
+    if (-not $ServerExe) {
         [System.Windows.Forms.MessageBox]::Show(
-            "没有找到 Node.js，无法启动缓存服务。", '碧蓝幻想本地缓存程序', 'OK', 'Error') | Out-Null
+            "没有找到 GBFCache.exe 或 Node.js，无法启动缓存服务。", '碧蓝幻想本地缓存程序', 'OK', 'Error') | Out-Null
         exit 1
     }
 
@@ -155,9 +172,16 @@ try {
             # 弹窗口由本托盘程序统一负责，否则一次启动会出现两个窗口，
             # 而「重启服务」会让旧窗口留着、再叠一个新窗口。
             $env:GBFCACHE_OPEN_UI = '0'
-            $script:Proc = Start-Process -FilePath $NodeExe -ArgumentList 'server.js' `
-                -WorkingDirectory $Dir -WindowStyle Hidden -PassThru
-            Trace "已启动 node，pid=$($script:Proc.Id)（已禁用其自动弹窗）"
+            $env:GBFCACHE_LAUNCHED_BY_TRAY = '1'
+            $startArgs = @{
+                FilePath = $ServerExe
+                WorkingDirectory = $Dir
+                WindowStyle = 'Hidden'
+                PassThru = $true
+            }
+            if ($ServerArgs.Count) { $startArgs.ArgumentList = $ServerArgs }
+            $script:Proc = Start-Process @startArgs
+            Trace "已启动缓存服务，pid=$($script:Proc.Id)（已禁用其自动弹窗）"
         } catch {
             Trace "启动 node 异常: $($_.Exception.Message)"
             return $false
@@ -251,7 +275,17 @@ try {
 
     function Open-SelfTest {
         if (-not (Test-Server)) { Start-Server | Out-Null }
-        Start-Process ($BaseUrl + 'test')
+        try {
+            $r = Invoke-RestMethod -Uri ($BaseUrl + 'api/open-self-test') -Method Post -TimeoutSec 8
+            if (-not $r.ok) {
+                $why = if ($r.error) { [string]$r.error } else { '未知错误' }
+                [System.Windows.Forms.MessageBox]::Show('打开自检页失败：' + $why,
+                    'GBFCache', 'OK', 'Warning') | Out-Null
+            }
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show('无法打开自检页：' + $_.Exception.Message,
+                'GBFCache', 'OK', 'Warning') | Out-Null
+        }
     }
 
     function Open-CacheDir {
